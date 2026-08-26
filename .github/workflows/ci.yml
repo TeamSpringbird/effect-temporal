@@ -64,6 +64,7 @@ jobs:
             echo "package.json version ($PKG_VERSION) != tag ($TAG_VERSION)" >&2
             exit 1
           fi
+      # Authenticates via npm Trusted Publishing (OIDC): the id-token: write
+      # permission above lets npm verify this workflow against the trusted
+      # publisher configured on the package — no token, no secret.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
