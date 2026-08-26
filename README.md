@@ -27,8 +27,9 @@ const OrderFlow = Workflow.make("orderFlow", {
   success: Schema.String,
 });
 
-// The body is an Effect, running durably inside the Temporal sandbox:
-export const orderFlow = makeTemporalWorkflow(OrderFlow, (payload) =>
+// The body is an Effect, running durably inside
+// the Temporal sandbox — the same authoring Effect's other engines use:
+const OrderFlowLive = OrderFlow.toLayer((payload) =>
   Effect.gen(function* () {
     const paid = yield* callActivity(Charge, { orderId: payload.orderId });
     yield* DurableClock.sleep({ name: "cooling-off", duration: "3 days" });
@@ -36,6 +37,7 @@ export const orderFlow = makeTemporalWorkflow(OrderFlow, (payload) =>
     return `${paid}:approved-by:${approver}`;
   }),
 );
+export default workflowBundle(OrderFlowLive); // the bundle's dynamic default
 
 // Drive it from ordinary Node — typed success/error, idempotent by digest id.
 const program = Effect.gen(function* () {
@@ -144,7 +146,7 @@ push and PR. Publishing to npm happens on version tags:
 
 ```sh
 # bump "version" in package.json, then
-git tag v0.1.0 && git push --tags
+git tag v0.2.0 && git push --tags
 ```
 
 The publish job runs `npm publish` with provenance; it needs an `NPM_TOKEN`

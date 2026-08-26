@@ -6,7 +6,7 @@ Effect and Temporal each manage their own execution and their own clocks. This p
 
 `effect/unstable/workflow` defines workflow programs against an abstract `WorkflowEngine`. This package implements that engine twice:
 
-- **`engine-sandbox`** runs *inside* the Temporal workflow sandbox. `makeTemporalWorkflow` builds the Temporal workflow function: it decodes the payload, provides the engine, runs your handler as an Effect program, and encodes the exit. Engine operations map to sandbox primitives — child starts to `startChild`, deferreds to signals + `condition()`, clocks to durable timers.
+- **`engine-sandbox`** runs *inside* the Temporal workflow sandbox. `workflowBundle` builds the bundle's one dynamic workflow function from `Workflow.toLayer` registrations: per run it decodes the payload, provides the engine, runs your handler as an Effect program, and encodes the exit. Engine operations map to sandbox primitives — child starts to `startChild`, deferreds to signals + `condition()`, clocks to durable timers.
 - **`engine-client`** runs in ordinary Node. Engine operations map to Temporal client calls — `execute` starts (or attaches) and awaits, `poll` describes, `interrupt` cancels.
 
 One consequence worth knowing: **nothing ever suspends**. Effect's engine contract has a suspend/resume path for engines that park workflows; this engine blocks durably instead (a `condition()` or timer in the sandbox), so `resume` is a no-op and a `Suspended` result is a bug.

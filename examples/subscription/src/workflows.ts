@@ -1,7 +1,11 @@
 // The workflow bundle — the long-lived entity loop. Each iteration races
 // the next billing timer against inbound messages (a typed plan-change
 // update, a cancellation), and the run continues-as-new every few cycles so
-// history never grows without bound. The export name equals the tag.
+// history never grows without bound.
+//
+// The workflow registers itself with `Workflow.toLayer`, and
+// `workflowBundle` hosts every registration behind the bundle's one
+// dynamic default export.
 
 import { Effect } from "effect";
 import * as Option from "effect/Option";
@@ -10,7 +14,7 @@ import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import {
   callActivity,
   continueAsNew,
-  makeTemporalWorkflow,
+  workflowBundle,
   pollMailbox,
   setStateCell,
   takeMailbox,
@@ -29,7 +33,7 @@ const CYCLES_PER_RUN = 2;
 
 const MINIMUM_PLAN_CENTS = 100;
 
-export const subscription = makeTemporalWorkflow(Subscription, (payload) =>
+const SubscriptionLive = Subscription.toLayer((payload) =>
   Effect.gen(function* () {
     let planCents = payload.planCents;
     let cyclesBilled = payload.cyclesBilled;
@@ -96,3 +100,5 @@ export const subscription = makeTemporalWorkflow(Subscription, (payload) =>
     }
   }),
 );
+
+export default workflowBundle(SubscriptionLive);

@@ -1,9 +1,10 @@
-// Sliding-window batch demo — bundle entrypoint. Export names equal the
-// workflow tags. Children are started discarded (ABANDON) so a
-// continue-as-new never tears them down; each reports back to the
-// orchestrator's stable workflow id, which survives the run change.
+// Sliding-window batch demo — bundle entrypoint. Children are started
+// discarded (ABANDON) so a continue-as-new never tears them down; each
+// reports back to the orchestrator's stable workflow id, which survives the
+// run change.
 
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
@@ -11,7 +12,7 @@ import { proxyActivities } from "@temporalio/workflow";
 import {
   callRawActivity,
   continueAsNew,
-  makeTemporalWorkflow,
+  workflowBundle,
   offerMailbox,
   pollMailbox,
   takeMailbox,
@@ -25,7 +26,7 @@ const acts = proxyActivities<{ processRecord(index: string): Promise<string> }>(
 /** How many children one run starts before continuing as new. */
 const CHILDREN_PER_RUN = 2;
 
-export const effectBatchDemo = makeTemporalWorkflow(BatchDemo, (payload) =>
+const BatchDemoLive = BatchDemo.toLayer((payload) =>
   Effect.gen(function* () {
     const inFlight = new Set(payload.inFlight);
     let offset = payload.offset;
@@ -68,7 +69,7 @@ export const effectBatchDemo = makeTemporalWorkflow(BatchDemo, (payload) =>
   }),
 );
 
-export const effectRecordDemo = makeTemporalWorkflow(RecordDemo, (payload) =>
+const RecordDemoLive = RecordDemo.toLayer((payload) =>
   Effect.gen(function* () {
     yield* Activity.make({
       name: "process-record",
@@ -82,3 +83,5 @@ export const effectRecordDemo = makeTemporalWorkflow(RecordDemo, (payload) =>
     return `record:${payload.index}`;
   }),
 );
+
+export default workflowBundle(Layer.mergeAll(BatchDemoLive, RecordDemoLive));

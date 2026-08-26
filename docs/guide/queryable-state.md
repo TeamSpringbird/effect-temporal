@@ -44,7 +44,7 @@ Temporal query handlers are synchronous and read-only — they cannot run your E
 Updates, a state cell, and an approval compose into the long-lived observable entity — this is the shape the package exists for:
 
 ```ts
-export const effectMessageDemo = makeTemporalWorkflow(MessageDemo, () =>
+const MessageDemoLive = MessageDemo.toLayer(() =>
   Effect.gen(function* () {
     let language: string = SUPPORTED_LANGUAGES[0];
     yield* setStateCell(CurrentLanguage, language);

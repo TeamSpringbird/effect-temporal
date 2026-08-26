@@ -1,8 +1,9 @@
-// Mailbox demo — bundle entrypoint. Export names equal the workflow tags.
+// Mailbox demo — bundle entrypoint.
 
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { makeTemporalWorkflow, setStateCell, takeMailbox } from "../../engine-sandbox.js";
+import { workflowBundle, setStateCell, takeMailbox } from "../../engine-sandbox.js";
 import {
   DeadlineUpdates,
   StateDemo,
@@ -11,7 +12,7 @@ import {
   UpdatableTimerDemo,
 } from "./mailbox-demo.js";
 
-export const effectStateDemo = makeTemporalWorkflow(StateDemo, () =>
+const StateDemoLive = StateDemo.toLayer(() =>
   Effect.gen(function* () {
     const state = new Map<string, number>();
     while (true) {
@@ -28,7 +29,7 @@ export const effectStateDemo = makeTemporalWorkflow(StateDemo, () =>
   }),
 );
 
-export const effectUpdatableTimerDemo = makeTemporalWorkflow(UpdatableTimerDemo, (payload) =>
+const UpdatableTimerDemoLive = UpdatableTimerDemo.toLayer((payload) =>
   Effect.gen(function* () {
     let deadlineMillis = payload.initialMillis;
     let updates = 0;
@@ -49,3 +50,5 @@ export const effectUpdatableTimerDemo = makeTemporalWorkflow(UpdatableTimerDemo,
     }
   }),
 );
+
+export default workflowBundle(Layer.mergeAll(StateDemoLive, UpdatableTimerDemoLive));

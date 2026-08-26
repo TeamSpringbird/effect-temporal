@@ -1,12 +1,13 @@
-// Mutex demo — bundle entrypoint. Export names equal the workflow tags.
+// Mutex demo — bundle entrypoint.
 
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
 import {
   callRawActivity,
-  makeTemporalWorkflow,
+  workflowBundle,
   offerMailbox,
   takeMailbox,
 } from "../../engine-sandbox.js";
@@ -19,7 +20,7 @@ const acts = proxyActivities<{
   startToCloseTimeout: "10 seconds",
 });
 
-export const effectLockDemo = makeTemporalWorkflow(LockDemo, (payload) =>
+const LockDemoLive = LockDemo.toLayer((payload) =>
   Effect.gen(function* () {
     for (let token = 0; token < payload.grants; token++) {
       const request = yield* takeMailbox(AcquireRequests);
@@ -33,7 +34,7 @@ export const effectLockDemo = makeTemporalWorkflow(LockDemo, (payload) =>
   }),
 );
 
-export const effectContenderDemo = makeTemporalWorkflow(ContenderDemo, (payload, executionId) =>
+const ContenderDemoLive = ContenderDemo.toLayer((payload, executionId) =>
   Effect.gen(function* () {
     yield* offerMailbox(AcquireRequests, {
       workflowId: payload.lockExecutionId,
@@ -59,3 +60,5 @@ export const effectContenderDemo = makeTemporalWorkflow(ContenderDemo, (payload,
     return `done:${payload.name}`;
   }),
 );
+
+export default workflowBundle(Layer.mergeAll(LockDemoLive, ContenderDemoLive));

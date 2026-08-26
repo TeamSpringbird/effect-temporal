@@ -1,6 +1,6 @@
 {
   "name": "@springbird/effect-temporal",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Run `effect/unstable/workflow` programs (Workflow / Activity / DurableClock / DurableDeferred) on a Temporal engine, plus durable mailboxes, updates, queryable state, versioning, schedules, and Nexus operations.",
   "license": "MIT",
   "type": "module",

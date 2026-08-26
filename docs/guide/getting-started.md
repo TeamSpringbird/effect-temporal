@@ -45,16 +45,16 @@ export const OrderFlow = Workflow.make("orderFlow", {
 
 ## 2. Author the body
 
-The body is an Effect that runs inside the Temporal workflow sandbox. Export it from your workflow bundle **under the workflow's tag** — the export name is the Temporal workflow type.
+The body is an Effect that runs inside the Temporal workflow sandbox. Workflows register themselves with `Workflow.toLayer`, and `workflowBundle` hosts every registration behind the bundle's **default export** — the same authoring that runs on Effect's cluster and in-memory engines.
 
 ```ts
 // workflows.ts — the workflow bundle (Temporal's workflowsPath points here)
 import { Effect } from "effect";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { callActivity, makeTemporalWorkflow } from "@springbird/effect-temporal/engine-sandbox";
+import { callActivity, workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
 import { OrderFlow, Reserve } from "./definitions.js";
 
-export const orderFlow = makeTemporalWorkflow(OrderFlow, (payload) =>
+const OrderFlowLive = OrderFlow.toLayer((payload) =>
   Effect.gen(function* () {
     // A typed activity: payload validated, result decoded, typed failure
     // lands in the error channel. Retries are Temporal's, per the options.
@@ -66,6 +66,8 @@ export const orderFlow = makeTemporalWorkflow(OrderFlow, (payload) =>
     return `reserved:${reservation}`;
   }),
 );
+
+export default workflowBundle(OrderFlowLive); // Layer.mergeAll(...) for more
 ```
 
 ## 3. Implement the activities and run a worker

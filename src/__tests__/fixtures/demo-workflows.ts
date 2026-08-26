@@ -1,8 +1,7 @@
 // Demo workflow — bundle entrypoint. One workflow exercising the core
 // primitives: a compensated step (reserve → release), a durable delay, an
 // external approval wait, a typed-failure path that triggers the
-// compensation, and a long-activity path for in-flight cancellation. The
-// export name equals the workflow tag.
+// compensation, and a long-activity path for in-flight cancellation.
 
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -12,7 +11,7 @@ import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, makeTemporalWorkflow } from "../../engine-sandbox.js";
+import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
 import { Approval, Demo } from "./demo.js";
 
 const acts = proxyActivities<{
@@ -23,7 +22,7 @@ const acts = proxyActivities<{
   startToCloseTimeout: "10 minutes",
 });
 
-export const effectDemo = makeTemporalWorkflow(Demo, (payload) =>
+const DemoLive = Demo.toLayer((payload) =>
   Effect.gen(function* () {
     const reservation = yield* Activity.make({
       name: "reserve",
@@ -70,3 +69,5 @@ export const effectDemo = makeTemporalWorkflow(Demo, (payload) =>
     return `${reservation}|approved-by:${approver}`;
   }),
 );
+
+export default workflowBundle(DemoLive);

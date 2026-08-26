@@ -1,8 +1,8 @@
 /**
- * Sandbox half: `makeTemporalWorkflow(workflow, handler)` turns an Effect
- * workflow definition + handler into a Temporal workflow function. Export it
- * from the workflow bundle under the workflow's tag — the export name is the
- * Temporal workflow type the client half starts.
+ * Sandbox half: `workflowBundle(layer)` hosts plain
+ * `Workflow.toLayer` registrations behind one dynamic Temporal workflow —
+ * export it as the workflow bundle's DEFAULT export and every registered
+ * tag becomes a startable Temporal workflow type.
  *
  * The whole Effect program runs inside the workflow sandbox, on a
  * microtask-driven scheduler (the sandbox has no `setImmediate`, and Effect's
@@ -36,6 +36,8 @@ import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import type { Scope } from "effect/Scope";
+import * as ScopeImpl from "effect/Scope";
+import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
@@ -835,37 +837,26 @@ const isCancellationExit = (exit: Exit.Exit<unknown, unknown>): boolean => {
   return Cause.hasDies(cause) && Cause.squash(cause) instanceof CancelledFailure;
 };
 
-/**
- * Build the Temporal workflow function for an Effect workflow definition.
- * The handler receives the typed payload and execution id and may require
- * only workflow-runtime services; anything effectful must reach the outside
- * world through `callRawActivity`.
- *
- * @since 0.1.0
- * @category constructors
- */
-export const makeTemporalWorkflow = <
-  Tag extends string,
-  Payload extends Workflow.AnyStructSchema,
-  Success extends Schema.Top,
-  Error extends Schema.Top,
->(
-  workflow: Workflow.Workflow<Tag, Payload, Success, Error>,
-  handler: (
-    payload: Payload["Type"],
-    executionId: string,
-  ) => Effect.Effect<
-    Success["Type"],
-    Error["Type"],
-    // Scope admits `Workflow.withCompensation` (which registers finalizers
-    // in the ambient scope `intoResult` provides and closes); SandboxRun is
-    // what `callRawActivity` reads.
-    WorkflowEngine.WorkflowEngine | WorkflowEngine.WorkflowInstance | Scope | SandboxRun
-  >,
-): ((wirePayload: unknown) => Promise<unknown>) => {
-  const codecs = wireCodecsFor(workflow);
+/** The erased registered-handler shape: `never` payload for contravariant
+ * assignability, R = what the run wrapper provides. */
+type SandboxHandler = (
+  payload: never,
+  executionId: string,
+) => Effect.Effect<
+  unknown,
+  unknown,
+  WorkflowEngine.WorkflowEngine | WorkflowEngine.WorkflowInstance | Scope | SandboxRun
+>;
 
-  return async function run(wirePayload: unknown): Promise<unknown> {
+/** One workflow run: decode the payload, wire the message handlers, race
+ * the body against cancellation, map the exit onto Temporal's outcomes. */
+const runInSandbox = async (
+  workflow: Workflow.Any,
+  handler: SandboxHandler,
+  wirePayload: unknown,
+): Promise<unknown> => {
+  const codecs = wireCodecsFor(workflow);
+  {
     ensureSandboxPolyfills();
     const state: RunState = {
       deferredExits: new Map(),
@@ -913,12 +904,9 @@ export const makeTemporalWorkflow = <
       // A malformed payload is a caller bug: fail the RUN, not the workflow
       // task — a thrown decode error here would make Temporal retry the task
       // forever, hanging the execution instead of surfacing the defect.
-      let payload: Payload["Type"];
+      let payload: unknown;
       try {
-        // SAFETY: `wireCodecsFor` decodes through the workflow's own
-        // payloadSchema, so the decoded value is exactly `Payload["Type"]` —
-        // the codec seam types it as unknown.
-        payload = codecs.decodePayload(wirePayload) as Payload["Type"];
+        payload = codecs.decodePayload(wirePayload);
       } catch (error) {
         throw ApplicationFailure.create({
           type: EXIT_FAILURE_TYPE,
@@ -949,7 +937,9 @@ export const makeTemporalWorkflow = <
         Effect.andThen(Effect.failCause(Cause.interrupt())),
       );
 
-      const body = Effect.raceFirst(handler(payload, executionId), cancelled);
+      // SAFETY: payload was decoded through this workflow's own schema, and
+      // the handler was registered for this workflow.
+      const body = Effect.raceFirst(handler(payload as never, executionId), cancelled);
 
       const program = Workflow.intoResult(body).pipe(
         Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
@@ -1005,5 +995,118 @@ export const makeTemporalWorkflow = <
       }
       return codecs.encodeExit(result.exit);
     });
+  }
+};
+
+interface RegisteredWorkflow {
+  readonly workflow: Workflow.Any;
+  readonly execute: SandboxHandler;
+}
+
+const registrationOnly = (method: string) =>
+  Effect.die(
+    `TemporalRegistrationEngine.${method}: reachable only inside a workflow run — during registration only \`register\` exists`,
+  );
+
+/** Type-level placeholder: the real per-run state is provided at run time
+ * (run-site context wins over registration context). */
+const registrationSandboxRun = new Proxy({} as RunState, {
+  get() {
+    throw new Error(
+      "SandboxRun accessed during workflow registration — sandbox operations only run inside a workflow body",
+    );
+  },
+});
+
+/** layer → registry, memoized per V8 context (reuseV8Context-safe). */
+const workflowRegistries = new Map<
+  Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+  Promise<Map<string, RegisteredWorkflow>>
+>();
+
+const buildRegistry = (
+  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+): Effect.Effect<Map<string, RegisteredWorkflow>> =>
+  Effect.gen(function* () {
+    const registry = new Map<string, RegisteredWorkflow>();
+    const registrationEngine = WorkflowEngine.makeUnsafe({
+      register: (workflow, execute) =>
+        Effect.sync(() => {
+          if (registry.has(workflow._tag)) {
+            throw new Error(
+              `effect-workflow: workflow tag "${workflow._tag}" registered twice — each tag may appear in ONE toLayer within the layer passed to workflowBundle`,
+            );
+          }
+          registry.set(workflow._tag, { workflow, execute });
+        }),
+      execute: () => registrationOnly("execute") as never,
+      poll: () => registrationOnly("poll") as never,
+      interrupt: () => registrationOnly("interrupt"),
+      interruptUnsafe: () => registrationOnly("interruptUnsafe"),
+      resume: () => registrationOnly("resume"),
+      activityExecute: () => registrationOnly("activityExecute") as never,
+      deferredResult: () => registrationOnly("deferredResult") as never,
+      deferredDone: () => registrationOnly("deferredDone"),
+      scheduleClock: () => registrationOnly("scheduleClock"),
+    });
+    // Never closed: registrations live for the V8 context, so registration
+    // layers must not own resources.
+    const scope = yield* ScopeImpl.make();
+    yield* Layer.buildWithScope(
+      Layer.provide(
+        workflows,
+        Layer.mergeAll(
+          Layer.succeed(WorkflowEngine.WorkflowEngine, registrationEngine),
+          Layer.succeed(SandboxRunTag, registrationSandboxRun),
+        ),
+      ),
+      scope,
+    );
+    return registry;
+  });
+
+/**
+ * Host `Workflow.toLayer` registrations behind one dynamic Temporal
+ * workflow, exported as the bundle's DEFAULT export — Temporal routes every
+ * workflow type to it, and the registry dispatches by tag:
+ *
+ * ```ts
+ * // workflows.ts — the bundle entry
+ * export default workflowBundle(
+ *   Layer.mergeAll(
+ *     OrderFlow.toLayer(orderHandler),
+ *     BillingFlow.toLayer(billingHandler),
+ *   ),
+ * );
+ * ```
+ *
+ * The same authoring runs on any `WorkflowEngine` (cluster, in-memory);
+ * choosing Temporal is choosing this default export plus the client half's engine layer.
+ *
+ * @since 0.2.0
+ * @category constructors
+ */
+export const workflowBundle = (
+  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+): ((wirePayload: unknown) => Promise<unknown>) => {
+  return async function runDynamic(wirePayload: unknown): Promise<unknown> {
+    ensureSandboxPolyfills();
+    let registryPromise = workflowRegistries.get(workflows);
+    if (registryPromise === undefined) {
+      registryPromise = Effect.runPromise(buildRegistry(workflows), {
+        scheduler: sandboxScheduler,
+      });
+      workflowRegistries.set(workflows, registryPromise);
+    }
+    const registry = await registryPromise;
+    const workflowType = workflowInfo().workflowType;
+    const entry = registry.get(workflowType);
+    if (entry === undefined) {
+      throw ApplicationFailure.create({
+        nonRetryable: true,
+        message: `effect-workflow: no workflow registered for Temporal type "${workflowType}" — include its \`toLayer\` in the layer passed to workflowBundle`,
+      });
+    }
+    return runInSandbox(entry.workflow, entry.execute, wirePayload);
   };
 };

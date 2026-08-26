@@ -20,7 +20,7 @@ The library is one npm package, `@springbird/effect-temporal`, with tree-shakeab
 
 | Module | Runs in | What it is |
 | --- | --- | --- |
-| `@springbird/effect-temporal/engine-sandbox` | the workflow bundle | `makeTemporalWorkflow`, activity calls, mailbox/update/state-cell operations |
+| `@springbird/effect-temporal/engine-sandbox` | the workflow bundle | `workflowBundle`, activity calls, mailbox/update/state-cell operations |
 | `@springbird/effect-temporal/engine-client` | ordinary Node | the client-side engine + standalone read/signal operations |
 | `@springbird/effect-temporal/client` | ordinary Node | `WorkflowClient` — the one client service |
 | `@springbird/effect-temporal/typed-activity` | both | schema-typed activity definitions |
@@ -35,6 +35,7 @@ The library is one npm package, `@springbird/effect-temporal`, with tree-shakeab
 
 Temporal's TypeScript SDK gives you durable execution with untyped seams: workflow arguments, results, signals, and failures all travel as loosely-typed payloads, and failure means catching `ApplicationFailure` and inspecting strings. effect-temporal keeps every one of those seams schema-typed:
 
+- **Engine-agnostic authoring.** Workflows register with `Workflow.toLayer` and are hosted behind one dynamic default export (`workflowBundle`) — the identical workflow code runs on Effect's cluster engine, the in-memory test engine, or Temporal. Choosing a backend is choosing a Layer.
 - **Payloads, results, and errors are schemas.** The engine validates and encodes what crosses each boundary; your workflow body and your client both see decoded, typed values — including typed *failures*, which land in the Effect error channel on the reading side instead of an exception to string-match.
 - **Composition is Effect.** `Effect.raceFirst` a mailbox against a durable timer, wrap a step in `Workflow.withCompensation`, pipe a timeout onto an activity call — interruption, finalizers, and compensation compose the way the rest of your Effect code does, and cancellation reaches the server (an interrupted activity call is cancelled server-side, not abandoned).
 - **One definition, both sides.** A workflow, activity, mailbox, update, or state cell is declared once and imported by the bundle, the worker, and every client. A misspelled name or drifted payload shape is a compile error, not a production incident.

@@ -28,7 +28,7 @@ Offers to closed executions are dropped by design, and on the workflow side any 
 
 ## The sandbox is still the sandbox
 
-Temporal's determinism constraints apply to the code you write inside `makeTemporalWorkflow`: no direct I/O, no non-deterministic module state, versioned changes to in-flight code. The [authoring rules](/guide/lint-rules) and the engine remove the accidental ways to trip — they cannot remove the model.
+Temporal's determinism constraints apply to the code you write inside workflow handlers: no direct I/O, no non-deterministic module state, versioned changes to in-flight code. The [authoring rules](/guide/lint-rules) and the engine remove the accidental ways to trip — they cannot remove the model.
 
 ## Polyfilled sandbox globals
 

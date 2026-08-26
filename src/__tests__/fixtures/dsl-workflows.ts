@@ -1,10 +1,10 @@
-// DSL-interpreter demo — bundle entrypoint. The export name equals the tag.
+// DSL-interpreter demo — bundle entrypoint.
 
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, makeTemporalWorkflow } from "../../engine-sandbox.js";
+import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
 import { DslDemo } from "./dsl-demo.js";
 
 const acts = proxyActivities<{ runTask(name: string): Promise<string> }>({
@@ -18,7 +18,7 @@ const runTask = (name: string) =>
     execute: callRawActivity(() => acts.runTask(name)),
   });
 
-export const effectDslDemo = makeTemporalWorkflow(DslDemo, (payload) =>
+const DslDemoLive = DslDemo.toLayer((payload) =>
   Effect.gen(function* () {
     const outputs: string[] = [];
     for (const step of payload.steps) {
@@ -35,3 +35,5 @@ export const effectDslDemo = makeTemporalWorkflow(DslDemo, (payload) =>
     return outputs.join(">");
   }),
 );
+
+export default workflowBundle(DslDemoLive);

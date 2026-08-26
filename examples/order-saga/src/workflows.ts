@@ -1,16 +1,16 @@
 // The workflow bundle — Temporal's workflowsPath points here. The whole body
 // is an Effect running deterministically inside the workflow sandbox; every
-// side effect goes through a typed activity. The export name equals the
-// workflow tag.
+// side effect goes through a typed activity. The workflow registers itself
+// with `Workflow.toLayer`, hosted by the bundle's default export.
 
 import { Effect } from "effect";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import { callActivity, makeTemporalWorkflow, setStateCell } from "@springbird/effect-temporal/engine-sandbox";
+import { callActivity, workflowBundle, setStateCell } from "@springbird/effect-temporal/engine-sandbox";
 import { Charge, ManagerApproval, OrderSaga, OrderStatus, Release, Reserve } from "./definitions.js";
 
-export const orderSaga = makeTemporalWorkflow(OrderSaga, (payload) =>
+const OrderSagaLive = OrderSaga.toLayer((payload) =>
   Effect.gen(function* () {
     yield* setStateCell(OrderStatus, { phase: "reserving" });
 
@@ -43,3 +43,5 @@ export const orderSaga = makeTemporalWorkflow(OrderSaga, (payload) =>
     return `${reservation}|${receipt}|approved-by:${approver}`;
   }),
 );
+
+export default workflowBundle(OrderSagaLive);

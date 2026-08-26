@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, makeTemporalWorkflow } from "../../engine-sandbox.js";
+import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
 import { PollingDemo } from "./polling-demo.js";
 
 const acts = proxyActivities<{ pollService(): Promise<string> }>({
@@ -15,7 +15,7 @@ const acts = proxyActivities<{ pollService(): Promise<string> }>({
   retry: { initialInterval: "60 seconds", backoffCoefficient: 1 },
 });
 
-export const effectPollingDemo = makeTemporalWorkflow(PollingDemo, () =>
+const PollingDemoLive = PollingDemo.toLayer(() =>
   Effect.gen(function* () {
     const status = yield* Activity.make({
       name: "poll-service",
@@ -25,3 +25,5 @@ export const effectPollingDemo = makeTemporalWorkflow(PollingDemo, () =>
     return `service:${status}`;
   }),
 );
+
+export default workflowBundle(PollingDemoLive);
