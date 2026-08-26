@@ -9,6 +9,17 @@ interfaces from `effect/unstable/*`, whose API can move between releases. Each r
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
 
+## 0.2.0 (unreleased)
+
+- BREAKING: workflow bundles are authored with `Workflow.toLayer`, hosted behind `workflowBundle(layer)` — one
+  dynamic default export per bundle, the same registration-driven authoring
+  the cluster and in-memory engines use. Handlers can require services
+  provided by ordinary Layers in the registration environment.
+  `makeTemporalWorkflow` is REMOVED: one way to author. (If per-type
+  `workflowDefinitionOptions` — e.g. Worker Versioning behavior — becomes a
+  need, the worker-level `defaultVersioningBehavior` covers the dynamic
+  workflow, and a per-type escape hatch can return later.)
+
 ## 0.1.1 (2026-08-26)
 
 Initial public release. (0.1.0 was published without provenance during

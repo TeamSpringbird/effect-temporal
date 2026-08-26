@@ -31,7 +31,6 @@ import {
 import {
   callRawActivity,
   continueAsNew,
-  makeTemporalWorkflow,
   offerMailbox as offerMailboxFromWorkflow,
   setStateCell,
   takeMailbox,
@@ -84,7 +83,7 @@ const _workflowChannels = () => {
 };
 
 const _handlerInference = () =>
-  makeTemporalWorkflow(Demo, (payload, executionId) => {
+  Demo.toLayer((payload, executionId) => {
     expectTypeOf(payload).toEqualTypeOf<DemoPayload>();
     expectTypeOf(executionId).toEqualTypeOf<string>();
     return Effect.succeed("ok");

@@ -51,9 +51,9 @@ const ManagerApproval = DurableDeferred.make("manager-approval", {
   success: Schema.String,
 });
 
-// 2. Author the body — an Effect, running durably in the Temporal sandbox.
-//    (workflow bundle: engine-sandbox module)
-export const orderFlow = makeTemporalWorkflow(OrderFlow, (payload) =>
+// 2. Author the body — an Effect, running durably in the
+//    Temporal sandbox. (workflow bundle: engine-sandbox module)
+const OrderFlowLive = OrderFlow.toLayer((payload) =>
   Effect.gen(function* () {
     const paid = yield* callActivity(Charge, { orderId: payload.orderId });
     yield* DurableClock.sleep({ name: "cooling-off", duration: "3 days" });
@@ -61,6 +61,7 @@ export const orderFlow = makeTemporalWorkflow(OrderFlow, (payload) =>
     return `${paid}:approved-by:${approver}`;
   }),
 );
+export default workflowBundle(OrderFlowLive);
 
 // 3. Drive it from ordinary Node — typed success, typed failure, idempotent.
 const wf = yield* WorkflowClient;

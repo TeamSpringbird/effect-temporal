@@ -1,18 +1,19 @@
 // Nexus demo — bundle entrypoint: the workflow-backed operation's target
-// (`effectGreetDemo`) and the caller. Export names equal the workflow tags.
+// (`GreetDemo`) and the caller.
 
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import { createNexusServiceClient } from "@temporalio/workflow";
 import {
   callNexusWorkflowOperation,
   callRawActivity,
-  makeTemporalWorkflow,
+  workflowBundle,
   type NexusOperationClient,
 } from "../../engine-sandbox.js";
 import { CallerDemo, GreetDemo, helloService } from "./nexus-demo.js";
 
-export const effectGreetDemo = makeTemporalWorkflow(GreetDemo, (payload) =>
+const GreetDemoLive = GreetDemo.toLayer((payload) =>
   Effect.gen(function* () {
     if (payload.name === "grinch") return yield* Effect.fail(`unwelcome:${payload.name}`);
     if (payload.name === "slow") {
@@ -22,7 +23,7 @@ export const effectGreetDemo = makeTemporalWorkflow(GreetDemo, (payload) =>
   }),
 );
 
-export const effectNexusCallerDemo = makeTemporalWorkflow(CallerDemo, (payload) =>
+const CallerDemoLive = CallerDemo.toLayer((payload) =>
   Effect.gen(function* () {
     const nexusClient = createNexusServiceClient({
       service: helloService,
@@ -50,3 +51,5 @@ export const effectNexusCallerDemo = makeTemporalWorkflow(CallerDemo, (payload) 
     return `${echoed.message}|${greeting}`;
   }),
 );
+
+export default workflowBundle(Layer.mergeAll(GreetDemoLive, CallerDemoLive));

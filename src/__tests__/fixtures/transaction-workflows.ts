@@ -6,10 +6,10 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import { condition } from "@temporalio/workflow";
-import { makeTemporalWorkflow, takeUpdate } from "../../engine-sandbox.js";
+import { workflowBundle, takeUpdate } from "../../engine-sandbox.js";
 import { GetConfirmation, TransactionDemo } from "./transaction-demo.js";
 
-export const effectTransactionDemo = makeTemporalWorkflow(TransactionDemo, () =>
+const TransactionDemoLive = TransactionDemo.toLayer(() =>
   Effect.gen(function* () {
     const state = { confirmed: false };
 
@@ -29,3 +29,5 @@ export const effectTransactionDemo = makeTemporalWorkflow(TransactionDemo, () =>
     return "complete:77";
   }),
 );
+
+export default workflowBundle(TransactionDemoLive);

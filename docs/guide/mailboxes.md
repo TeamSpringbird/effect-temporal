@@ -22,7 +22,7 @@ export const StateUpdates = DurableMailbox.make("state-updates", {
 ```ts
 import { setStateCell, takeMailbox } from "@springbird/effect-temporal/engine-sandbox";
 
-export const effectStateDemo = makeTemporalWorkflow(StateDemo, () =>
+const StateDemoLive = StateDemo.toLayer(() =>
   Effect.gen(function* () {
     const state = new Map<string, number>();
     while (true) {

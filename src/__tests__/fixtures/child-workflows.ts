@@ -1,16 +1,17 @@
-// Child-workflow demo — bundle entrypoint. Parent and child are both shim
-// workflows exported from ONE bundle (a child's Temporal type must live in
-// the same bundle as its parent). The parent's first step is compensated so
-// the cancel test can assert parent-side compensation alongside child
+// Child-workflow demo — bundle entrypoint. Parent and child are both
+// registered in ONE bundle (a child's Temporal type must live in the same
+// bundle as its parent). The parent's first step is compensated so the
+// cancel test can assert parent-side compensation alongside child
 // cancellation.
 
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, makeTemporalWorkflow } from "../../engine-sandbox.js";
+import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
 import { ChildDemo, ParentDemo } from "./child-demo.js";
 
 const acts = proxyActivities<{
@@ -21,7 +22,7 @@ const acts = proxyActivities<{
   startToCloseTimeout: "10 seconds",
 });
 
-export const effectChildDemo = makeTemporalWorkflow(ChildDemo, (payload) =>
+const ChildDemoLive = ChildDemo.toLayer((payload) =>
   Effect.gen(function* () {
     if (payload.outcome === "sleep") {
       yield* DurableClock.sleep({ name: "child-delay", duration: "2 minutes" });
@@ -38,7 +39,7 @@ export const effectChildDemo = makeTemporalWorkflow(ChildDemo, (payload) =>
   }),
 );
 
-export const effectParentDemo = makeTemporalWorkflow(ParentDemo, (payload) =>
+const ParentDemoLive = ParentDemo.toLayer((payload) =>
   Effect.gen(function* () {
     const reservation = yield* Activity.make({
       name: "reserve",
@@ -68,3 +69,5 @@ export const effectParentDemo = makeTemporalWorkflow(ParentDemo, (payload) =>
     return `${reservation}|${childResult}`;
   }),
 );
+
+export default workflowBundle(Layer.mergeAll(ChildDemoLive, ParentDemoLive));

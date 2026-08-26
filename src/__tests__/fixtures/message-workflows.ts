@@ -1,9 +1,10 @@
-// Message-passing demo — bundle entrypoint. The export name equals the tag.
+// Message-passing demo — bundle entrypoint.
 
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
-import { makeTemporalWorkflow, setStateCell, takeUpdate } from "../../engine-sandbox.js";
+import { workflowBundle, setStateCell, takeUpdate } from "../../engine-sandbox.js";
 import {
   Approved,
   CurrentLanguage,
@@ -13,7 +14,7 @@ import {
   SUPPORTED_LANGUAGES,
 } from "./message-demo.js";
 
-export const effectMessageDemo = makeTemporalWorkflow(MessageDemo, () =>
+const MessageDemoLive = MessageDemo.toLayer(() =>
   Effect.gen(function* () {
     let language: string = SUPPORTED_LANGUAGES[0];
     yield* setStateCell(CurrentLanguage, language);
@@ -44,7 +45,7 @@ export const effectMessageDemo = makeTemporalWorkflow(MessageDemo, () =>
 /** Sends `DurableDeferred.done` to a foreign execution id through the
  * engine, then returns — the target being closed or unknown must be a no-op
  * for this sender. */
-export const effectDeferredPokeDemo = makeTemporalWorkflow(DeferredPokeDemo, (payload) =>
+const DeferredPokeDemoLive = DeferredPokeDemo.toLayer((payload) =>
   Effect.gen(function* () {
     yield* DurableDeferred.done(Approved, {
       token: DurableDeferred.tokenFromExecutionId(Approved, {
@@ -56,3 +57,5 @@ export const effectDeferredPokeDemo = makeTemporalWorkflow(DeferredPokeDemo, (pa
     return "ok";
   }),
 );
+
+export default workflowBundle(Layer.mergeAll(MessageDemoLive, DeferredPokeDemoLive));

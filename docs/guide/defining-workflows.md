@@ -20,18 +20,23 @@ export const OrderFlow = Workflow.make("orderFlow", {
 
 ## The body
 
-`makeTemporalWorkflow(definition, handler)` turns the definition plus an Effect handler into a Temporal workflow function. Export it from the bundle **under the definition's tag** — the export name is the Temporal workflow type clients start.
+Register the handler with `Workflow.toLayer`, and host every registration behind the bundle's default export with `workflowBundle`:
 
 ```ts
-export const orderFlow = makeTemporalWorkflow(OrderFlow, (payload, executionId) =>
+const OrderFlowLive = OrderFlow.toLayer((payload, executionId) =>
   Effect.gen(function* () {
     // ... activities, timers, signals — see the rest of the guide
     return "done";
   }),
 );
+
+// the bundle's ONE default export hosts every registered workflow
+export default workflowBundle(Layer.mergeAll(OrderFlowLive /*, ... */));
 ```
 
-The handler receives the decoded payload and the execution id, and may require only workflow-runtime services. Everything effectful must reach the outside world through an activity call — see [Activities](/guide/activities) and the [authoring rules](/guide/lint-rules).
+This is the same registration-driven authoring Effect's cluster and in-memory engines use — the workflow code is engine-agnostic, and choosing Temporal is choosing this default export plus the client half's engine layer. Handlers can require services provided by ordinary Layers composed into the registration environment (`Layer.provide` on the merged layer).
+
+The handler receives the decoded payload and the execution id. Everything effectful must reach the outside world through an activity call — see [Activities](/guide/activities) and the [authoring rules](/guide/lint-rules).
 
 ## One definition, three call sites
 

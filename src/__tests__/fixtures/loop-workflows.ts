@@ -1,6 +1,7 @@
-// Looping workflow — bundle entrypoint. The export name equals the tag.
+// Looping workflow — bundle entrypoint.
 
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
@@ -8,7 +9,7 @@ import { proxyActivities } from "@temporalio/workflow";
 import {
   callRawActivity,
   continueAsNew,
-  makeTemporalWorkflow,
+  workflowBundle,
   setStateCell,
 } from "../../engine-sandbox.js";
 import { CellLoopDemo, LoopDemo, LoopGate, LoopStage } from "./loop-demo.js";
@@ -17,7 +18,7 @@ const acts = proxyActivities<{ record(iteration: string): Promise<string> }>({
   startToCloseTimeout: "10 seconds",
 });
 
-export const effectLoopDemo = makeTemporalWorkflow(LoopDemo, (payload) =>
+const LoopDemoLive = LoopDemo.toLayer((payload) =>
   Effect.gen(function* () {
     yield* Activity.make({
       name: "record",
@@ -32,7 +33,7 @@ export const effectLoopDemo = makeTemporalWorkflow(LoopDemo, (payload) =>
   }),
 );
 
-export const effectCellLoopDemo = makeTemporalWorkflow(CellLoopDemo, (payload) =>
+const CellLoopDemoLive = CellLoopDemo.toLayer((payload) =>
   Effect.gen(function* () {
     if (payload.iteration === 0) {
       yield* setStateCell(LoopStage, "run-0");
@@ -49,3 +50,5 @@ export const effectCellLoopDemo = makeTemporalWorkflow(CellLoopDemo, (payload) =
     return "cell-done";
   }),
 );
+
+export default workflowBundle(Layer.mergeAll(LoopDemoLive, CellLoopDemoLive));

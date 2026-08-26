@@ -3,9 +3,9 @@
 Temporal caps a run's history; a workflow that loops forever — an entity, a poller, a batch cursor — must periodically **continue as new**: end the current run and atomically start a fresh one with the same workflow id and a reset history.
 
 ```ts
-import { continueAsNew, makeTemporalWorkflow } from "@springbird/effect-temporal/engine-sandbox";
+import { continueAsNew } from "@springbird/effect-temporal/engine-sandbox";
 
-export const effectLoopDemo = makeTemporalWorkflow(LoopDemo, (payload) =>
+const LoopDemoLive = LoopDemo.toLayer((payload) =>
   Effect.gen(function* () {
     yield* callActivity(Record, { iteration: payload.iteration });
     if (payload.iteration >= 2) return `done:${payload.iteration}`;

@@ -3,7 +3,7 @@
 Calling one workflow's `execute` inside another's body starts a Temporal **child workflow**. Both must be shim workflows exported from the **same bundle** — a child's Temporal type resolves within the bundle that runs the parent.
 
 ```ts
-export const effectParentDemo = makeTemporalWorkflow(ParentDemo, (payload) =>
+const ParentDemoLive = ParentDemo.toLayer((payload) =>
   Effect.gen(function* () {
     const reservation = yield* callActivity(Reserve, { sku: payload.sku, quantity: 1 });
 
