@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      # Build BEFORE test: the lint test consumes the shipped oxlint preset,
+      # whose "effect-temporal/lint" plugin specifier resolves through this
+      # package's own `exports` to dist/lint.js.
+      - run: pnpm run build
+      # Each test file boots a Temporal test-server process (downloaded on
+      # first use by @temporalio/testing).
+      - run: pnpm run test
+      # The runnable examples are part of the contract: typecheck them
+      # against the built package and run them end to end (each boots its
+      # own local Temporal dev server).
+      - run: pnpm --dir examples/order-saga run typecheck
+      - run: pnpm --dir examples/order-saga start
+      - run: pnpm --dir examples/subscription run typecheck
+      - run: pnpm --dir examples/subscription start
+      - run: pnpm run docs:build
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      # The tag must match package.json — a mismatched tag publishes nothing.
+      - name: Check tag matches package version
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "package.json version ($PKG_VERSION) != tag ($TAG_VERSION)" >&2
+            exit 1
+          fi
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

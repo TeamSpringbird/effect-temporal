@@ -1,0 +1,9 @@
+{
+  "jsPlugins": ["@springbird/effect-temporal/lint"],
+  "rules": {
+    "effect-temporal/zero-arity-effect-promise": "error",
+    "effect-temporal/no-module-level-mutable": "error",
+    "effect-temporal/no-mixed-halves": "error",
+    "effect-temporal/versioning-on-main-fiber": "error"
+  }
+}

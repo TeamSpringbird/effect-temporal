@@ -1,0 +1,7 @@
+packages:
+  - "examples/*"
+allowBuilds:
+  "@swc/core": true
+  msgpackr-extract: true
+  protobufjs: true
+  esbuild: true

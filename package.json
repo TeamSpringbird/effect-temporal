@@ -1,0 +1,138 @@
+{
+  "name": "@springbird/effect-temporal",
+  "version": "0.1.1",
+  "description": "Run `effect/unstable/workflow` programs (Workflow / Activity / DurableClock / DurableDeferred) on a Temporal engine, plus durable mailboxes, updates, queryable state, versioning, schedules, and Nexus operations.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "./dist/sandbox-polyfills.js"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/__tests__",
+    "oxlint-presets",
+    "EXAMPLES.md"
+  ],
+  "exports": {
+    "./activities": {
+      "types": "./dist/activities.d.ts",
+      "default": "./dist/activities.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./engine-client": {
+      "types": "./dist/engine-client.d.ts",
+      "default": "./dist/engine-client.js"
+    },
+    "./engine-sandbox": {
+      "types": "./dist/engine-sandbox.d.ts",
+      "default": "./dist/engine-sandbox.js"
+    },
+    "./lint": "./dist/lint.js",
+    "./mailbox": {
+      "types": "./dist/mailbox.d.ts",
+      "default": "./dist/mailbox.js"
+    },
+    "./nexus": {
+      "types": "./dist/nexus.d.ts",
+      "default": "./dist/nexus.js"
+    },
+    "./oxlint-presets/*.json": "./oxlint-presets/*.json",
+    "./state-cell": {
+      "types": "./dist/state-cell.d.ts",
+      "default": "./dist/state-cell.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./typed-activity": {
+      "types": "./dist/typed-activity.d.ts",
+      "default": "./dist/typed-activity.js"
+    },
+    "./update": {
+      "types": "./dist/update.d.ts",
+      "default": "./dist/update.js"
+    },
+    "./versioning": {
+      "types": "./dist/versioning.d.ts",
+      "default": "./dist/versioning.js"
+    },
+    "./wire": {
+      "types": "./dist/wire.d.ts",
+      "default": "./dist/wire.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/lint.js dist/lint.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm run build",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "lint": "oxlint"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@temporalio/client": "~1.19.0",
+    "@temporalio/nexus": "~1.19.0",
+    "@temporalio/testing": "~1.19.0",
+    "@temporalio/worker": "~1.19.0",
+    "@temporalio/workflow": "~1.19.0",
+    "effect": "4.0.0-beta.101"
+  },
+  "peerDependenciesMeta": {
+    "@temporalio/nexus": {
+      "optional": true
+    },
+    "@temporalio/testing": {
+      "optional": true
+    },
+    "@temporalio/worker": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.0.1"
+  },
+  "devDependencies": {
+    "@temporalio/client": "1.19.0",
+    "@temporalio/nexus": "1.19.0",
+    "@temporalio/testing": "1.19.0",
+    "@temporalio/worker": "1.19.0",
+    "@temporalio/workflow": "1.19.0",
+    "@types/node": "^22.19.9",
+    "effect": "4.0.0-beta.101",
+    "nexus-rpc": "^0.0.2",
+    "oxlint": "1.77.0",
+    "typescript": "^5.9.0",
+    "vitepress": "^1.6.4",
+    "vitest": "^4.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TeamSpringbird/effect-temporal.git"
+  },
+  "homepage": "https://www.effect-temporal.com",
+  "bugs": {
+    "url": "https://github.com/TeamSpringbird/effect-temporal/issues"
+  },
+  "keywords": [
+    "effect",
+    "temporal",
+    "workflow",
+    "durable-execution",
+    "saga",
+    "typescript"
+  ]
+}

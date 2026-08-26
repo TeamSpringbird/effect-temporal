@@ -1,0 +1,24 @@
+{
+  "name": "effect-temporal-example-subscription",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Runnable end-to-end example: Temporal's canonical subscription workflow as a long-lived entity — billing cycles on durable timers, typed plan-change updates, cancellation by mailbox, and continue-as-new.",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@temporalio/client": "1.19.0",
+    "@temporalio/testing": "1.19.0",
+    "@temporalio/worker": "1.19.0",
+    "@temporalio/workflow": "1.19.0",
+    "effect": "4.0.0-beta.101",
+    "@springbird/effect-temporal": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.9",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0"
+  }
+}

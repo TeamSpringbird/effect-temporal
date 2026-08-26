@@ -1,0 +1,9 @@
+{
+  "jsPlugins": ["./src/lint.js"],
+  "ignorePatterns": ["dist", "docs/.vitepress/cache", "docs/.vitepress/dist"],
+  "rules": {
+    "effect-temporal/zero-arity-effect-promise": "error",
+    "effect-temporal/no-module-level-mutable": "error",
+    "effect-temporal/versioning-on-main-fiber": "error"
+  }
+}
