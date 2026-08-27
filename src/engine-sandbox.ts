@@ -96,6 +96,9 @@ import {
   type MailboxSignalPayload,
 } from "./mailbox.js";
 import { STATE_CELL_QUERY, stateCellCodec, type StateCell } from "./state-cell.js";
+import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
+import { WorkflowOps, type WorkflowOpsRuntime } from "./definition.js";
+import * as Versioning from "./versioning.js";
 import {
   updateCodec,
   WORKFLOW_UPDATE,
@@ -1020,12 +1023,12 @@ const registrationSandboxRun = new Proxy({} as RunState, {
 
 /** layer → registry, memoized per V8 context (reuseV8Context-safe). */
 const workflowRegistries = new Map<
-  Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+  Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun | WorkflowOps>,
   Promise<Map<string, RegisteredWorkflow>>
 >();
 
 const buildRegistry = (
-  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun | WorkflowOps>,
 ): Effect.Effect<Map<string, RegisteredWorkflow>> =>
   Effect.gen(function* () {
     const registry = new Map<string, RegisteredWorkflow>();
@@ -1058,12 +1061,34 @@ const buildRegistry = (
         Layer.mergeAll(
           Layer.succeed(WorkflowEngine.WorkflowEngine, registrationEngine),
           Layer.succeed(SandboxRunTag, registrationSandboxRun),
+          Layer.succeed(WorkflowOps, temporalWorkflowOps),
         ),
       ),
       scope,
     );
     return registry;
   });
+
+/**
+ * The Temporal implementation of the declared-workflow ops seam: every
+ * operation dispatches into this module's machinery. Provided automatically
+ * to the layers `workflowBundle` hosts.
+ *
+ * @since 0.3.0
+ * @category workflow
+ */
+export const temporalWorkflowOps: WorkflowOpsRuntime = {
+  // SAFETY: each op requires SandboxRun (and the engine) at the type level;
+  // the per-run wrapper provides them — same discipline as SandboxHandler.
+  activity: (activity, payload) => callActivity(activity, payload as never) as never,
+  deferredAwait: (deferred) => DurableDeferred.await(deferred) as never,
+  mailboxTake: (mailbox) => takeMailbox(mailbox) as never,
+  mailboxPoll: (mailbox) => pollMailbox(mailbox) as never,
+  updateTake: (update) => takeUpdate(update) as never,
+  stateSet: (cell, value) => setStateCell(cell, value) as never,
+  version: (site, names) =>
+    Versioning.version(site, names as unknown as readonly [string, ...string[]]),
+};
 
 /**
  * Host `Workflow.toLayer` registrations behind one dynamic Temporal
@@ -1087,7 +1112,7 @@ const buildRegistry = (
  * @category constructors
  */
 export const workflowBundle = (
-  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun | WorkflowOps>,
 ): ((wirePayload: unknown) => Promise<unknown>) => {
   return async function runDynamic(wirePayload: unknown): Promise<unknown> {
     ensureSandboxPolyfills();

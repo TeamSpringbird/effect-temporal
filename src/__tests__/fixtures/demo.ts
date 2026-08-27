@@ -2,11 +2,12 @@
 // client-side tests. No `@temporalio/*` imports: it loads in both worlds.
 
 import * as Schema from "effect/Schema";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as Workflow from "effect/unstable/workflow/Workflow";
+import { defineDeferred } from "../../definition.js";
 
-/** The approval gate; completed from outside via `DurableDeferred.done`. */
-export const Approval = DurableDeferred.make("demo-approval", {
+/** The approval gate; completed from outside via
+ * `DurableDeferred.done(Approval.deferred, ...)`. */
+export const Approval = defineDeferred("demo-approval", {
   success: Schema.String,
 });
 

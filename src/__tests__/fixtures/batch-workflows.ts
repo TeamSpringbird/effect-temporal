@@ -14,8 +14,6 @@ import {
   continueAsNew,
   workflowBundle,
   offerMailbox,
-  pollMailbox,
-  takeMailbox,
 } from "../../engine-sandbox.js";
 import { BatchDemo, CompletionReports, RecordDemo } from "./batch-demo.js";
 
@@ -34,7 +32,7 @@ const BatchDemoLive = BatchDemo.toLayer((payload) =>
 
     while (offset < payload.total && startedThisRun < CHILDREN_PER_RUN) {
       if (inFlight.size >= payload.window) {
-        const report = yield* takeMailbox(CompletionReports);
+        const report = yield* CompletionReports.take;
         inFlight.delete(report.index);
       }
       yield* RecordDemo.execute(
@@ -54,7 +52,7 @@ const BatchDemoLive = BatchDemo.toLayer((payload) =>
       // Reports that landed during this run would be lost at
       // continue-as-new; drain them into the carried set first.
       while (true) {
-        const report = yield* pollMailbox(CompletionReports);
+        const report = yield* CompletionReports.poll;
         if (Option.isNone(report)) break;
         inFlight.delete(report.value.index);
       }
@@ -62,7 +60,7 @@ const BatchDemoLive = BatchDemo.toLayer((payload) =>
     }
 
     while (inFlight.size > 0) {
-      const report = yield* takeMailbox(CompletionReports);
+      const report = yield* CompletionReports.take;
       inFlight.delete(report.index);
     }
     return `processed:${payload.total}`;
@@ -76,7 +74,7 @@ const RecordDemoLive = RecordDemo.toLayer((payload) =>
       success: Schema.String,
       execute: callRawActivity(() => acts.processRecord(String(payload.index))),
     });
-    yield* offerMailbox(CompletionReports, {
+    yield* offerMailbox(CompletionReports.mailbox, {
       workflowId: payload.batchExecutionId,
       payload: { index: payload.index },
     });

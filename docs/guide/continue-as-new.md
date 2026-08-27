@@ -7,7 +7,7 @@ import { continueAsNew } from "@springbird/effect-temporal/engine-sandbox";
 
 const LoopDemoLive = LoopDemo.toLayer((payload) =>
   Effect.gen(function* () {
-    yield* callActivity(Record, { iteration: payload.iteration });
+    yield* Record({ iteration: payload.iteration });
     if (payload.iteration >= 2) return `done:${payload.iteration}`;
     // Ends this run; the next starts with the carried payload.
     return yield* continueAsNew(LoopDemo, {
@@ -32,12 +32,12 @@ Like Temporal's native API, continue-as-new ends the run by throwing: Effect **f
 
 The new run starts with fresh state:
 
-- **Mailbox buffers.** Messages offered but not yet taken are gone. Drain with `pollMailbox` into carried state first:
+- **Mailbox buffers.** Messages offered but not yet taken are gone. Drain with the mailbox's `.poll` into carried state first:
 
   ```ts
   let pending: Report[] = [];
   while (true) {
-    const next = yield* pollMailbox(Reports);
+    const next = yield* Reports.poll;
     if (Option.isNone(next)) break;
     pending.push(next.value);
   }

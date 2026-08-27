@@ -34,25 +34,27 @@ The timestamp is epoch milliseconds or a date-time string that **carries its zon
 Inside the sandbox, `Effect.sleep`, `Effect.timeout*`, and `Schedule` delays land on the sandbox's `setTimeout`, which **is** a durable Temporal timer — deterministic on replay, but each one is a history event. For waits that matter, prefer the named forms above: the name shows up in your program and your reasoning. Be deliberate about retry schedules with many short delays.
 :::
 
-## Approvals: DurableDeferred
+## Approvals: defineDeferred
 
-A `DurableDeferred` is a one-shot typed completion an outside party resolves — the "wait for a human" primitive.
+A deferred is a one-shot typed completion an outside party resolves — the "wait for a human" primitive.
 
 ```ts
 // definitions
-export const ManagerApproval = DurableDeferred.make("manager-approval", {
+import { defineDeferred } from "@springbird/effect-temporal/definition";
+
+export const ManagerApproval = defineDeferred("manager-approval", {
   success: Schema.String,
 });
 
 // workflow body: blocks durably on a Temporal signal
-const approver = yield* DurableDeferred.await(ManagerApproval);
+const approver = yield* ManagerApproval.await;
 ```
 
-Complete it from any client — `DurableDeferred.done` rides a signal:
+Complete it from any client — `DurableDeferred.done` rides a signal, addressed to the declaration's underlying primitive, `ManagerApproval.deferred`:
 
 ```ts
-yield* DurableDeferred.done(ManagerApproval, {
-  token: DurableDeferred.tokenFromExecutionId(ManagerApproval, {
+yield* DurableDeferred.done(ManagerApproval.deferred, {
+  token: DurableDeferred.tokenFromExecutionId(ManagerApproval.deferred, {
     workflow: OrderFlow,
     executionId,
   }),
@@ -68,11 +70,11 @@ Completing a deferred on a closed or unknown execution is a **no-op** — an app
 
 ```ts
 const wf = yield* WorkflowClient;
-const state = yield* wf.deferredState(ManagerApproval, workflowId);
+const state = yield* wf.deferredState(ManagerApproval.deferred, workflowId);
 // Option.none() while pending or unknown; Option.some(typed exit) once completed
 ```
 
-Without the service, the standalone form is `deferredState(ManagerApproval, { client, workflowId })` from `@springbird/effect-temporal/engine-client`.
+Without the service, the standalone form is `deferredState(ManagerApproval.deferred, { client, workflowId })` from `@springbird/effect-temporal/engine-client`.
 
 ## Composing time with messages
 
@@ -83,7 +85,7 @@ let deadlineMillis = payload.initialMillis;
 let updates = 0;
 while (true) {
   const winner = yield* Effect.raceFirst(
-    takeMailbox(DeadlineUpdates).pipe(Effect.map((u) => ({ kind: "update" as const, u }))),
+    DeadlineUpdates.take.pipe(Effect.map((u) => ({ kind: "update" as const, u }))),
     DurableClock.sleep({
       name: `deadline-${updates}`,
       duration: `${deadlineMillis} millis`,

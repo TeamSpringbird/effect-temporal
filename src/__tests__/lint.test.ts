@@ -18,6 +18,7 @@ import { proxyActivities } from "@temporalio/workflow";
 import { callRawActivity } from "@springbird/effect-temporal/engine-sandbox";
 import { makeTemporalClientEngine } from "@springbird/effect-temporal/engine-client";
 import * as Versioning from "@springbird/effect-temporal/versioning";
+import { version } from "@springbird/effect-temporal/definition";
 
 let counter = 0;
 const acts = proxyActivities<{ foo(): Promise<string> }>({ startToCloseTimeout: "10 seconds" });
@@ -26,13 +27,16 @@ export const a = Effect.promise((signal) => acts.foo());
 export const b = Effect.promise(() => acts.foo());
 export const c = callRawActivity(() => acts.foo());
 export const d = Effect.forkChild(Versioning.patched("x"));
+export const e = Effect.forkChild(version("y", ["v1", "v2"]));
 `;
 
 const GOOD = `
 import { callRawActivity } from "@springbird/effect-temporal/engine-sandbox";
+import { version } from "@springbird/effect-temporal/definition";
 
 declare const acts: { foo(): Promise<string> };
 export const c = callRawActivity(() => acts.foo());
+export const v = version("site", ["v1", "v2"]);
 `;
 
 const runOxlint = (directory: string, files: string[]) => {

@@ -26,9 +26,9 @@ A definition is a tag, a payload schema, an idempotency key, and success/error s
 // definitions.ts — shared by the bundle and every client
 import { Schema } from "effect";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
+import { defineActivity } from "@springbird/effect-temporal/definition";
 
-export const Reserve = TypedActivity.make("reserve", {
+export const Reserve = defineActivity("reserve", {
   payload: { sku: Schema.String, quantity: Schema.Finite },
   success: Schema.String,
   error: Schema.TaggedStruct("OutOfStock", { sku: Schema.String }),
@@ -51,17 +51,15 @@ The body is an Effect that runs inside the Temporal workflow sandbox. Workflows 
 // workflows.ts — the workflow bundle (Temporal's workflowsPath points here)
 import { Effect } from "effect";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { callActivity, workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
+import { workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
 import { OrderFlow, Reserve } from "./definitions.js";
 
 const OrderFlowLive = OrderFlow.toLayer((payload) =>
   Effect.gen(function* () {
-    // A typed activity: payload validated, result decoded, typed failure
-    // lands in the error channel. Retries are Temporal's, per the options.
-    const reservation = yield* callActivity(Reserve, {
-      sku: payload.sku,
-      quantity: 1,
-    });
+    // A declared activity, called directly: payload validated, result
+    // decoded, typed failure lands in the error channel. Retries are
+    // Temporal's, per the declaration's options.
+    const reservation = yield* Reserve({ sku: payload.sku, quantity: 1 });
     yield* DurableClock.sleep({ name: "cooling-off", duration: "1 minute" });
     return `reserved:${reservation}`;
   }),
@@ -138,6 +136,7 @@ That's the whole loop: definition → body → worker → client, with schemas h
 
 - **The runnable examples** — each boots its own local Temporal dev server (`pnpm run build`, then `pnpm --dir examples/<name> start`): [`examples/order-saga`](https://github.com/TeamSpringbird/effect-temporal/tree/main/examples/order-saga) is the one-shot saga (typed activities, compensation, approval, queryable state, idempotent attach, cancellation); [`examples/subscription`](https://github.com/TeamSpringbird/effect-temporal/tree/main/examples/subscription) is the long-lived entity (billing cycles, typed updates, mailbox cancellation, continue-as-new).
 - [Defining workflows](/guide/defining-workflows): idempotency, execution ids, start semantics.
-- [Activities](/guide/activities): typed activities, raw calls, failure and retry semantics.
-- [Testing your app](/guide/testing): the typed fake client and the live harness.
+- [Declaring capabilities](/guide/declaring-capabilities): the `definition` module — one declaration per capability, one seam (`WorkflowOps`) engines implement.
+- [Activities](/guide/activities): declared activities, raw calls, failure and retry semantics.
+- [Testing your app](/guide/testing): the in-memory runtime, the typed fake client, and the live harness.
 - [Lint rules](/guide/lint-rules): catch the authoring footguns mechanically.

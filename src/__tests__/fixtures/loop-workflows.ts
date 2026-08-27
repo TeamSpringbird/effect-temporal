@@ -4,14 +4,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import { proxyActivities } from "@temporalio/workflow";
-import {
-  callRawActivity,
-  continueAsNew,
-  workflowBundle,
-  setStateCell,
-} from "../../engine-sandbox.js";
+import { callRawActivity, continueAsNew, workflowBundle } from "../../engine-sandbox.js";
 import { CellLoopDemo, LoopDemo, LoopGate, LoopStage } from "./loop-demo.js";
 
 const acts = proxyActivities<{ record(iteration: string): Promise<string> }>({
@@ -36,8 +30,8 @@ const LoopDemoLive = LoopDemo.toLayer((payload) =>
 const CellLoopDemoLive = CellLoopDemo.toLayer((payload) =>
   Effect.gen(function* () {
     if (payload.iteration === 0) {
-      yield* setStateCell(LoopStage, "run-0");
-      yield* DurableDeferred.await(LoopGate);
+      yield* LoopStage.set("run-0");
+      yield* LoopGate.await;
       return yield* continueAsNew(CellLoopDemo, {
         requestId: payload.requestId,
         iteration: 1,
@@ -45,8 +39,8 @@ const CellLoopDemoLive = CellLoopDemo.toLayer((payload) =>
     }
     // Run 2: idle (cell unpublished in THIS run) until released, then
     // republish and finish.
-    const release = yield* DurableDeferred.await(LoopGate);
-    yield* setStateCell(LoopStage, `run-1:${release}`);
+    const release = yield* LoopGate.await;
+    yield* LoopStage.set(`run-1:${release}`);
     return "cell-done";
   }),
 );

@@ -1,12 +1,12 @@
 # Queryable state
 
-A `StateCell` makes workflow state observable from outside: the workflow publishes typed snapshots to a named cell, and clients read the latest one through a Temporal query — mid-flight or **after the run has closed**.
+A state cell makes workflow state observable from outside: the workflow publishes typed snapshots to a named cell, and clients read the latest one through a Temporal query — mid-flight or **after the run has closed**.
 
 ```ts
 // definitions
-import * as StateCell from "@springbird/effect-temporal/state-cell";
+import { defineState } from "@springbird/effect-temporal/definition";
 
-export const CurrentLanguage = StateCell.make("current-language", {
+export const CurrentLanguage = defineState("current-language", {
   value: Schema.String,
 });
 ```
@@ -14,23 +14,23 @@ export const CurrentLanguage = StateCell.make("current-language", {
 ## Publishing (workflow side)
 
 ```ts
-import { setStateCell } from "@springbird/effect-temporal/engine-sandbox";
-
-yield* setStateCell(CurrentLanguage, "english");
+yield* CurrentLanguage.set("english");
 ```
 
 Each publish replaces the previous snapshot. Publish after every state change you want observers to see.
 
 ## Reading (client side)
 
+Readers address the declaration's underlying primitive, `CurrentLanguage.cell`:
+
 ```ts
 const wf = yield* WorkflowClient;
-const snapshot = yield* wf.readStateCell(CurrentLanguage, workflowId);
+const snapshot = yield* wf.readStateCell(CurrentLanguage.cell, workflowId);
 // Option.none() while the execution is unknown or the cell unpublished;
 // Option.some(typed value) otherwise — including after the run closed.
 ```
 
-Without the service, the standalone form is `readStateCell(CurrentLanguage, { client, workflowId })` from `@springbird/effect-temporal/engine-client`.
+Without the service, the standalone form is `readStateCell(CurrentLanguage.cell, { client, workflowId })` from `@springbird/effect-temporal/engine-client`.
 
 ## Why snapshots, not query functions
 
@@ -47,11 +47,11 @@ Updates, a state cell, and an approval compose into the long-lived observable en
 const MessageDemoLive = MessageDemo.toLayer(() =>
   Effect.gen(function* () {
     let language: string = SUPPORTED_LANGUAGES[0];
-    yield* setStateCell(CurrentLanguage, language);
+    yield* CurrentLanguage.set(language);
     while (true) {
       const winner = yield* Effect.raceFirst(
-        takeUpdate(SetLanguage).pipe(Effect.map((request) => ({ kind: "update" as const, request }))),
-        DurableDeferred.await(Approved).pipe(Effect.map((approver) => ({ kind: "approved" as const, approver }))),
+        SetLanguage.take.pipe(Effect.map((request) => ({ kind: "update" as const, request }))),
+        Approved.await.pipe(Effect.map((approver) => ({ kind: "approved" as const, approver }))),
       );
       if (winner.kind === "approved") return `approved:${language} by ${winner.approver}`;
 
@@ -59,7 +59,7 @@ const MessageDemoLive = MessageDemo.toLayer(() =>
       if ((SUPPORTED_LANGUAGES as readonly string[]).includes(requested)) {
         yield* winner.request.respond(Exit.succeed(language));
         language = requested;
-        yield* setStateCell(CurrentLanguage, language);
+        yield* CurrentLanguage.set(language);
       } else {
         yield* winner.request.respond(Exit.fail(`unsupported:${requested}`));
       }

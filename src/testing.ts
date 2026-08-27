@@ -14,13 +14,20 @@
  * @since 0.1.0
  */
 
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Queue from "effect/Queue";
 import type * as Schema from "effect/Schema";
 import type * as Workflow from "effect/unstable/workflow/Workflow";
+import type { ActivityRunner, BoundActivity } from "./activities.js";
 import { makeWorkflowClient, type WorkflowStartOptions } from "./client.js";
 import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/client";
 import type { PayloadOf, SuccessOf } from "./client.js";
+import { WorkflowOps, type UpdateRequest, type WorkflowOpsRuntime } from "./definition.js";
+import { codecsFor } from "./typed-activity.js";
 import { wireCodecsFor } from "./wire.js";
 
 /**
@@ -402,3 +409,152 @@ export const startWorkflowTestHarness = async (
     },
   };
 };
+
+// ─── In-memory WorkflowOps ───────────────────────────────────────────────────
+
+/**
+ * A running in-memory world for handler unit tests: provide `layer` to a
+ * workflow handler and drive its declared channels from the outside —
+ * exactly what a client would do against the real engine, minus the engine.
+ *
+ * @since 0.3.0
+ * @category models
+ */
+export interface TestWorkflowOps {
+  /** Provides `WorkflowOps` backed by this world. */
+  readonly layer: Layer.Layer<WorkflowOps>;
+  /** Resolve a declared deferred, waking any handler blocked on `.await`. */
+  readonly resolve: <A>(
+    deferred: { readonly deferred: object; readonly await: Effect.Effect<A, never, WorkflowOps> },
+    value: A,
+  ) => Effect.Effect<void>;
+  /** Deliver one mailbox message. */
+  readonly offer: <P>(
+    mailbox: { readonly mailbox: object; readonly take: Effect.Effect<P, never, WorkflowOps> },
+    payload: P,
+  ) => Effect.Effect<void>;
+  /** Send an update request and await its typed response. */
+  readonly request: <P, S, E>(
+    update: {
+      readonly update: object;
+      readonly take: Effect.Effect<UpdateRequest<P, S, E>, never, WorkflowOps>;
+    },
+    payload: P,
+  ) => Effect.Effect<S, E>;
+  /** Read the last value a handler `set` on a declared state cell. */
+  readonly stateOf: <V>(cell: {
+    readonly cell: object;
+    readonly set: (value: V) => Effect.Effect<void, never, WorkflowOps>;
+  }) => Effect.Effect<Option.Option<V>>;
+}
+
+/**
+ * Build an in-memory `WorkflowOps` runtime, so the SAME handler that runs
+ * on Temporal runs in a plain unit test:
+ *
+ * ```ts
+ * const world = yield* makeTestWorkflowOps({
+ *   activities: [handle(Charge, () => Effect.succeed("receipt"))],
+ * });
+ * const fiber = yield* Effect.forkChild(
+ *   orderHandler({ orderId: "o-1" }).pipe(Effect.provide(world.layer)),
+ * );
+ * yield* world.resolve(Approval, "ben");
+ * ```
+ *
+ * Activity calls run their bound handlers with the payload round-tripped
+ * through the declaration's schema (as the wire would); typed failures land
+ * in the error channel, everything else is a defect. A call to an activity
+ * with no binding dies loudly. `version` always answers the newest name —
+ * there is no replay in memory.
+ *
+ * @since 0.3.0
+ * @category constructors
+ */
+export const makeTestWorkflowOps = (options?: {
+  readonly activities?: ReadonlyArray<BoundActivity<never, string>>;
+}): Effect.Effect<TestWorkflowOps> =>
+  Effect.sync(() => {
+    const bindings = new Map((options?.activities ?? []).map((b) => [b.activity.name, b]));
+    const runner: ActivityRunner<never> = {
+      run: (_name, _payload, effect) => Effect.runPromiseExit(effect),
+    };
+    const deferreds = new Map<object, Deferred.Deferred<unknown>>();
+    const mailboxes = new Map<object, Queue.Queue<unknown>>();
+    const updates = new Map<object, Queue.Queue<UpdateRequest<unknown, unknown, unknown>>>();
+    const cells = new Map<object, unknown>();
+
+    const deferredFor = (key: object) => {
+      const existing = deferreds.get(key);
+      if (existing) return existing;
+      const created = Deferred.makeUnsafe<unknown>();
+      deferreds.set(key, created);
+      return created;
+    };
+    const queueFor = <T>(map: Map<object, Queue.Queue<T>>, key: object) =>
+      Effect.suspend(() => {
+        const existing = map.get(key);
+        if (existing) return Effect.succeed(existing);
+        return Effect.map(Queue.unbounded<T>(), (created) => {
+          const raced = map.get(key);
+          if (raced) return raced;
+          map.set(key, created);
+          return created;
+        });
+      });
+
+    const runtime: WorkflowOpsRuntime = {
+      activity: (activity, payload) =>
+        Effect.suspend(() => {
+          const binding = bindings.get(activity.name);
+          if (binding === undefined) {
+            return Effect.die(
+              `makeTestWorkflowOps: no binding for activity "${activity.name}" — pass it in \`activities\``,
+            );
+          }
+          const codecs = codecsFor(binding.activity);
+          const validated = codecs.payload.decode(codecs.payload.encode(payload));
+          return Effect.flatten(
+            Effect.promise(() => binding.execute(validated as never, runner)),
+          );
+        }),
+      deferredAwait: (deferred) => Deferred.await(deferredFor(deferred)),
+      mailboxTake: (mailbox) => Effect.flatMap(queueFor(mailboxes, mailbox), Queue.take),
+      mailboxPoll: (mailbox) => Effect.flatMap(queueFor(mailboxes, mailbox), Queue.poll),
+      updateTake: (update) => Effect.flatMap(queueFor(updates, update), Queue.take),
+      stateSet: (cell, value) => Effect.sync(() => void cells.set(cell, value)),
+      version: (_site, names) => Effect.succeed(names[names.length - 1]!),
+    };
+
+    const world: TestWorkflowOps = {
+      layer: Layer.succeed(WorkflowOps, runtime),
+      resolve: (wrapper, value) =>
+        Effect.asVoid(Deferred.done(deferredFor(wrapper.deferred), Exit.succeed(value))),
+      offer: (wrapper, payload) =>
+        Effect.asVoid(
+          Effect.flatMap(queueFor(mailboxes, wrapper.mailbox), (queue) =>
+            Queue.offer(queue, payload),
+          ),
+        ),
+      request: (wrapper, payload) =>
+        Effect.flatMap(queueFor(updates, wrapper.update), (queue) => {
+          const reply = Deferred.makeUnsafe<unknown, unknown>();
+          return Effect.flatMap(
+            Queue.offer(queue, {
+              payload,
+              respond: (exit) => Effect.asVoid(Deferred.done(reply, exit)),
+            }),
+            () => Deferred.await(reply),
+          );
+          // SAFETY: the reply deferred completes only through `respond`,
+          // whose exit the wrapper's declaration types as S/E.
+        }) as Effect.Effect<never, never>,
+      stateOf: (wrapper) =>
+        Effect.sync(() =>
+          cells.has(wrapper.cell)
+            ? Option.some(cells.get(wrapper.cell) as never)
+            : Option.none(),
+        ),
+    };
+    return world;
+  });

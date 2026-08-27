@@ -1,36 +1,16 @@
-// PROTOTYPE — throwaway. The data half of versioning: can a declaration's
-// schema EVOLVE (add/change fields) while old runs are in flight?
-//
-// Every boundary in the engine is schema-encoded JSON, and every decode
-// happens deterministically on replay — so the whole problem reduces to:
-// the CURRENT schema must decode the wire that OLD code wrote. `evolved`
-// makes that a declaration-level concern: newest schema first, legacy
-// schemas behind pure migrations, one Type coming out — so handler types
-// only ever see the newest shape.
+// The data half of versioning: a declaration's schema can EVOLVE (add or
+// change fields) while old runs are in flight. Every boundary in the engine
+// is schema-encoded JSON, and every decode happens deterministically on
+// replay — so the whole problem reduces to: the CURRENT schema must decode
+// the wire that OLD code wrote. `evolved` makes that a declaration-level
+// concern: newest schema first, legacy schemas behind pure migrations, one
+// Type coming out — so handler types only ever see the newest shape.
 
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as SchemaGetter from "effect/SchemaGetter";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { wireValueCodec } from "../../wire.js";
-
-/** Newest-first schema evolution: decode tries `current`, then each legacy
- * schema migrated forward by a PURE function (pure = deterministic on
- * replay). Encoding always writes the newest shape. */
-const evolved = <Current extends Schema.Top, Legacy extends Schema.Top>(
-  current: Current,
-  legacy: Legacy,
-  migrate: (value: Legacy["Type"]) => Current["Type"],
-) =>
-  Schema.Union([
-    current,
-    legacy.pipe(
-      Schema.decodeTo(current, {
-        decode: SchemaGetter.transform(migrate),
-        encode: SchemaGetter.forbidden(() => "legacy shapes are never written"),
-      }),
-    ),
-  ]);
+import { evolved } from "../definition.js";
+import { wireValueCodec } from "../wire.js";
 
 // V1 shipped without `priority`; V2 adds it. In-flight runs hold V1 wire in
 // their histories (start events, activity results, buffered signals).
@@ -38,7 +18,7 @@ const OrderV1 = Schema.Struct({ orderId: Schema.String });
 const OrderV2 = Schema.Struct({ orderId: Schema.String, priority: Schema.Finite });
 const OrderPayload = evolved(OrderV2, OrderV1, (v1) => ({ ...v1, priority: 0 }));
 
-describe("prototype: schema evolution across in-flight versions", () => {
+describe("schema evolution across in-flight versions", () => {
   it("decodes V1 wire (old histories) and V2 wire to ONE newest Type", () => {
     const codec = wireValueCodec(OrderPayload);
 
@@ -54,9 +34,10 @@ describe("prototype: schema evolution across in-flight versions", () => {
     expect(v2Wire).toEqual({ orderId: "b", priority: 3 });
 
     // The handler-facing Type is ONLY the newest shape.
-    expectTypeOf<(typeof OrderPayload)["Type"]>().toEqualTypeOf<
-      { readonly orderId: string; readonly priority: number }
-    >();
+    expectTypeOf<(typeof OrderPayload)["Type"]>().toEqualTypeOf<{
+      readonly orderId: string;
+      readonly priority: number;
+    }>();
   });
 
   it("rejects wire that matches NO version, instead of guessing", () => {

@@ -6,7 +6,7 @@ The workflow sandbox has authoring rules that a linter can see; this package shi
 
 The whole Effect program runs inside the Temporal workflow sandbox. `Activity.make` is a typed seam, not a Temporal Activity — durability comes from the Temporal activity proxies, timers, and signals the effects call, each memoized in history. Hence:
 
-1. **All I/O goes through an activity proxy via `callActivity` / `callRawActivity`.** Anything else is nondeterministic on replay. A raw `Effect.promise(() => acts.foo())` works but is not cancelled on interrupt.
+1. **All I/O goes through a Temporal activity — a [declared activity](/guide/declaring-capabilities) call (`yield* Charge(payload)`) or `callRawActivity`.** Anything else is nondeterministic on replay. A raw `Effect.promise(() => acts.foo())` works but is not cancelled on interrupt.
 2. **`Effect.promise` callbacks must be zero-arity** — non-zero arity makes Effect allocate an `AbortController` per call, which the sandbox does not provide.
 3. **No module-level mutable state in workflow code** — under the worker's default `reuseV8Context`, module-level variables are shared across every workflow instance on a thread. Keep run state inside the handler.
 4. **Never mix the halves** — a module must not import both the sandbox half (`@temporalio/workflow`, `engine-sandbox`) and the client half (`@temporalio/client`, `engine-client`): they can never share a process.

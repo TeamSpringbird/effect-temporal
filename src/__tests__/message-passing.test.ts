@@ -45,7 +45,7 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
       const setLanguage = (language: string) =>
         Effect.runPromise(
           Effect.result(
-            executeUpdate(SetLanguage, { client, workflowId: executionId, payload: { language } }),
+            executeUpdate(SetLanguage.update, { client, workflowId: executionId, payload: { language } }),
           ),
         );
 
@@ -60,13 +60,13 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
       const rejected = await setLanguage("klingon");
       expect(Result.isFailure(rejected) && rejected.failure).toBe("unsupported:klingon");
       const snapshot = await Effect.runPromise(
-        readStateCell(CurrentLanguage, { client, workflowId: executionId }),
+        readStateCell(CurrentLanguage.cell, { client, workflowId: executionId }),
       );
       expect(Option.isSome(snapshot) && snapshot.value).toBe("spanish");
 
       await run(
-        DurableDeferred.done(Approved, {
-          token: DurableDeferred.tokenFromExecutionId(Approved, {
+        DurableDeferred.done(Approved.deferred, {
+          token: DurableDeferred.tokenFromExecutionId(Approved.deferred, {
             workflow: MessageDemo,
             executionId,
           }),
@@ -91,7 +91,7 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
       // `Effect.exit` never rejects, so the floating promise is safe.
       const orphanExit = Effect.runPromise(
         Effect.exit(
-          executeUpdate(Orphan, { client, workflowId: executionId, payload: { note: "hello" } }),
+          executeUpdate(Orphan.update, { client, workflowId: executionId, payload: { note: "hello" } }),
         ),
       );
       // Give the update time to be admitted while the workflow still runs.
@@ -99,8 +99,8 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
 
       // Complete the workflow out from under the pending update.
       await run(
-        DurableDeferred.done(Approved, {
-          token: DurableDeferred.tokenFromExecutionId(Approved, {
+        DurableDeferred.done(Approved.deferred, {
+          token: DurableDeferred.tokenFromExecutionId(Approved.deferred, {
             workflow: MessageDemo,
             executionId,
           }),
@@ -120,7 +120,7 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
     await temporal.withWorker({ activities, workflowsPath }, async () => {
       const exit = await Effect.runPromise(
         Effect.exit(
-          executeUpdate(SetLanguage, {
+          executeUpdate(SetLanguage.update, {
             client: temporal.env.client,
             workflowId: "effect-update-never-started",
             payload: { language: "french" },
@@ -148,7 +148,7 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
         .executeUpdate<unknown, [WorkflowUpdatePayload]>(WORKFLOW_UPDATE, {
           args: [{ updateName: SetLanguage.name, payload: { language: 42 } }],
         });
-      const malformedExit = updateCodec(SetLanguage).decodeExit(wire);
+      const malformedExit = updateCodec(SetLanguage.update).decodeExit(wire);
       expect(Exit.isFailure(malformedExit) && Cause.hasDies(malformedExit.cause)).toBe(true);
       expect(
         Exit.isFailure(malformedExit) && String(Cause.squash(malformedExit.cause)),
@@ -158,7 +158,7 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
       // well-formed update, with state untouched.
       const ok = await Effect.runPromise(
         Effect.result(
-          executeUpdate(SetLanguage, {
+          executeUpdate(SetLanguage.update, {
             client,
             workflowId: executionId,
             payload: { language: "french" },
@@ -168,8 +168,8 @@ describe("DurableUpdate over Temporal", { concurrent: false }, () => {
       expect(Result.isSuccess(ok) && ok.success).toBe("english");
 
       await run(
-        DurableDeferred.done(Approved, {
-          token: DurableDeferred.tokenFromExecutionId(Approved, {
+        DurableDeferred.done(Approved.deferred, {
+          token: DurableDeferred.tokenFromExecutionId(Approved.deferred, {
             workflow: MessageDemo,
             executionId,
           }),

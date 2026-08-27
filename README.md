@@ -17,32 +17,33 @@ The same pages live in [docs/](docs/) (`pnpm docs:dev` to browse locally).
 import { Effect, Schema } from "effect";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
-import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
-import { callActivity, workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
+import { defineActivity, defineDeferred } from "@springbird/effect-temporal/definition";
+import { workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
 import { WorkflowClient } from "@springbird/effect-temporal/client";
 
-// Define once — shared by the workflow bundle, the worker, and every client.
+// Declare once — shared by the workflow bundle, the worker, and every client.
 const OrderFlow = Workflow.make("orderFlow", {
   payload: { orderId: Schema.String },
   idempotencyKey: ({ orderId }) => orderId,
   success: Schema.String,
 });
-const Charge = TypedActivity.make("charge", {
+const Charge = defineActivity("charge", {
   payload: { orderId: Schema.String },
   success: Schema.String,
 });
-const ManagerApproval = DurableDeferred.make("manager-approval", {
+const ManagerApproval = defineDeferred("manager-approval", {
   success: Schema.String,
 });
 
-// The body is an Effect, running durably inside
-// the Temporal sandbox — the same authoring Effect's other engines use:
+// The body calls the declarations directly. Its only requirement is the
+// WorkflowOps service — workflowBundle provides Temporal's; the testing
+// module provides an in-memory one, so the same handler runs in a plain
+// unit test with no engine.
 const OrderFlowLive = OrderFlow.toLayer((payload) =>
   Effect.gen(function* () {
-    const paid = yield* callActivity(Charge, { orderId: payload.orderId });
+    const paid = yield* Charge({ orderId: payload.orderId });
     yield* DurableClock.sleep({ name: "cooling-off", duration: "3 days" });
-    const approver = yield* DurableDeferred.await(ManagerApproval);
+    const approver = yield* ManagerApproval.await;
     return `${paid}:approved-by:${approver}`;
   }),
 );
@@ -65,20 +66,21 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
   contract over Temporal, for codebases that already run Temporal and do not
   want a second durable-execution system (Effect's own `effect/unstable/cluster`
   engine persists to its own SQL tables).
-- **One package, tree-shakeable modules** — `@springbird/effect-temporal/engine-sandbox`
-  (workflow bundle), `/engine-client` + `/client` (ordinary Node),
-  `/typed-activity` + `/activities` (worker), `/testing`, `/nexus`, `/lint`.
-  Nexus, worker, and testing peers are optional.
+- **One package, tree-shakeable modules** — `@springbird/effect-temporal/definition`
+  (declare capabilities once, engine-agnostic), `/engine-sandbox` (workflow
+  bundle), `/engine-client` + `/client` (ordinary Node), `/activities`
+  (worker), `/testing`, `/nexus`, `/lint`. Nexus, worker, and testing peers
+  are optional.
 - **Typed end to end** — payloads, results, and *failures* are schemas at
   every crossing: workflow results, activity calls, signals, queries, update
   responses. Typed failures land in the Effect error channel on the reading
   side; runs show red in the Temporal UI.
-- **Entity workflows, complete** — `DurableMailbox` (repeated inbound
-  signals), `DurableUpdate` (request/response with typed success *and*
-  failure), `StateCell` (queryable published state, readable after the run
-  closes), `continueAsNew`, and patch-marker versioning
-  (`Versioning.match` chains) make the long-lived, observable, mutable
-  entity expressible end to end.
+- **Entity workflows, complete** — `defineMailbox` (repeated inbound
+  signals), `defineUpdate` (request/response with typed success *and*
+  failure), `defineState` (queryable published state, readable after the run
+  closes), `continueAsNew`, patch-marker versioning (`version`), and schema
+  evolution (`evolved`) make the long-lived, observable, mutable entity
+  expressible end to end.
 - **Cancellation that composes** — workflow cancel interrupts the handler
   fiber (finalizers and `Workflow.withCompensation` run, their activity
   calls still work), and workflow-internal interruption — `Effect.timeout`,
@@ -93,8 +95,10 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
   the workflow sandbox on a microtask scheduler; clocks, randomness, and
   timers resolve to Temporal's replay-stable primitives. The mechanism is
   documented in [How the engine works](https://www.effect-temporal.com/reference/how-it-works).
-- **Testing story** — `makeFakeTemporalClient` (typed start/signal/
-  termination records, loud on everything unstubbed) for service tests, and
+- **Testing story** — `makeTestWorkflowOps` (an in-memory `WorkflowOps`
+  runtime: the same handler that runs on Temporal runs in a plain unit test
+  with no engine), `makeFakeTemporalClient` (typed start/signal/termination
+  records, loud on everything unstubbed) for service tests, and
   `startWorkflowTestHarness` over Temporal's time-skipping test server for
   real workflow semantics.
 - **Lint the footguns** — an oxlint/ESLint plugin ships in the package

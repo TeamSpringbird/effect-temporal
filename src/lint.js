@@ -124,11 +124,13 @@ const rules = {
       type: "suggestion",
       docs: {
         description:
-          "In workflow code, prefer callActivity (typed) or callRawActivity over raw " +
-          "Effect.promise: raw promises are not cancelled when the workflow is interrupted.",
+          "In workflow code, prefer a defined activity call (defineActivity) or " +
+          "callRawActivity over raw Effect.promise: raw promises are not cancelled " +
+          "when the workflow is interrupted.",
       },
       messages: {
-        prefer: "Prefer callActivity or callRawActivity — this call is not cancelled on interrupt.",
+        prefer:
+          "Prefer a defined activity (or callRawActivity) — this call is not cancelled on interrupt.",
       },
       schema: [],
     },
@@ -164,8 +166,9 @@ const rules = {
       type: "problem",
       docs: {
         description:
-          "Versioning.match/version/patched must run at a deterministic point on the main " +
-          "workflow fiber — inside forks and races, marker order becomes nondeterministic.",
+          "Versioning.match/version/patched — and the definition module's version() — must " +
+          "run at a deterministic point on the main workflow fiber: inside forks and races, " +
+          "marker order becomes nondeterministic.",
       },
       messages: { fiber: "Do not evaluate versions inside a fork or race." },
       schema: [],
@@ -179,12 +182,14 @@ const rules = {
             forkDepth++;
             return;
           }
-          if (
-            forkDepth > 0 &&
+          const isVersioningMember =
             node.callee.type === "MemberExpression" &&
             node.callee.object.type === "Identifier" &&
-            node.callee.object.name === "Versioning"
-          ) {
+            node.callee.object.name === "Versioning";
+          // The definition module's bare `version(site, names)` call.
+          const isDefinedVersion =
+            node.callee.type === "Identifier" && node.callee.name === "version";
+          if (forkDepth > 0 && (isVersioningMember || isDefinedVersion)) {
             state.reports.push({ node, messageId: "fiber" });
           }
         },

@@ -89,14 +89,14 @@ await worker.runUntil(() =>
       )).runId;
 
       yield* Effect.sleep("1500 millis");
-      const early = yield* wf.readStateCell(SubscriptionStatus, workflowId);
+      const early = yield* wf.readStateCell(SubscriptionStatus.cell, workflowId);
       console.log("  status:", Option.getOrNull(early));
 
       console.log("\n2. change the plan through a typed update");
-      const previous = yield* wf.executeUpdate(SetPlan, workflowId, { planCents: 1999 });
+      const previous = yield* wf.executeUpdate(SetPlan.update, workflowId, { planCents: 1999 });
       console.log("  previous plan:", previous, "¢");
       const rejected = yield* Effect.result(
-        wf.executeUpdate(SetPlan, workflowId, { planCents: 50 }),
+        wf.executeUpdate(SetPlan.update, workflowId, { planCents: 50 }),
       );
       if (Result.isFailure(rejected)) console.log("  typed rejection:", rejected.failure);
 
@@ -109,14 +109,14 @@ await worker.runUntil(() =>
         )).runId;
       }
       console.log("  continued-as-new:", runIdNow !== runIdAtStart, "(same workflow id, fresh history)");
-      const carried = yield* wf.readStateCell(SubscriptionStatus, workflowId);
+      const carried = yield* wf.readStateCell(SubscriptionStatus.cell, workflowId);
       console.log("  carried state republished:", Option.getOrNull(carried));
 
       console.log("\n4. cancel through the mailbox; the final status outlives the run");
-      yield* wf.offerMailbox(CancelRequests, workflowId, { reason: "user-requested" });
+      yield* wf.offerMailbox(CancelRequests.mailbox, workflowId, { reason: "user-requested" });
       const summary = yield* wf.execute(Subscription, payload); // attaches to the chain
       console.log("  result:", summary);
-      const final = yield* wf.readStateCell(SubscriptionStatus, workflowId);
+      const final = yield* wf.readStateCell(SubscriptionStatus.cell, workflowId);
       console.log("  status after close:", Option.getOrNull(final));
     }),
   ),

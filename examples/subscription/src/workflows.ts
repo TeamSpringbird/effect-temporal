@@ -5,21 +5,14 @@
 //
 // The workflow registers itself with `Workflow.toLayer`, and
 // `workflowBundle` hosts every registration behind the bundle's one
-// dynamic default export.
+// dynamic default export — providing the `WorkflowOps` runtime the
+// declarations require.
 
 import { Effect } from "effect";
 import * as Option from "effect/Option";
 import * as Exit from "effect/Exit";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import {
-  callActivity,
-  continueAsNew,
-  workflowBundle,
-  pollMailbox,
-  setStateCell,
-  takeMailbox,
-  takeUpdate,
-} from "@springbird/effect-temporal/engine-sandbox";
+import { continueAsNew, workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
 import {
   CancelRequests,
   ChargeCard,
@@ -41,7 +34,7 @@ const SubscriptionLive = Subscription.toLayer((payload) =>
 
     // Cells are per-run: republish immediately so observers never see a gap
     // after continue-as-new.
-    yield* setStateCell(SubscriptionStatus, { phase: "active", planCents, cyclesBilled });
+    yield* SubscriptionStatus.set({ phase: "active", planCents, cyclesBilled });
 
     while (true) {
       const winner = yield* Effect.raceAll([
@@ -51,26 +44,26 @@ const SubscriptionLive = Subscription.toLayer((payload) =>
           duration: "1 second",
         }).pipe(Effect.map(() => ({ kind: "bill" as const }))),
         // A plan change — answered with the PREVIOUS plan, typed both ways.
-        takeUpdate(SetPlan).pipe(Effect.map((request) => ({ kind: "plan" as const, request }))),
+        SetPlan.take.pipe(Effect.map((request) => ({ kind: "plan" as const, request }))),
         // A cancellation — fire-and-forget from anywhere.
-        takeMailbox(CancelRequests).pipe(
+        CancelRequests.take.pipe(
           Effect.map((message) => ({ kind: "cancel" as const, message })),
         ),
       ]);
 
       switch (winner.kind) {
         case "bill": {
-          yield* callActivity(ChargeCard, { customerId: payload.customerId, amountCents: planCents });
+          yield* ChargeCard({ customerId: payload.customerId, amountCents: planCents });
           cyclesBilled++;
           cyclesThisRun++;
-          yield* setStateCell(SubscriptionStatus, { phase: "active", planCents, cyclesBilled });
+          yield* SubscriptionStatus.set({ phase: "active", planCents, cyclesBilled });
           if (cyclesThisRun >= CYCLES_PER_RUN) {
             // Drain the mailbox BEFORE continuing — buffered messages do
             // not survive the run change. A cancellation that raced the
             // final cycle is honored instead of lost.
-            const pendingCancel = yield* pollMailbox(CancelRequests);
+            const pendingCancel = yield* CancelRequests.poll;
             if (Option.isSome(pendingCancel)) {
-              yield* setStateCell(SubscriptionStatus, { phase: "cancelled", planCents, cyclesBilled });
+              yield* SubscriptionStatus.set({ phase: "cancelled", planCents, cyclesBilled });
               return `cancelled(${pendingCancel.value.reason}) after ${cyclesBilled} cycles`;
             }
             return yield* continueAsNew(Subscription, {
@@ -89,11 +82,11 @@ const SubscriptionLive = Subscription.toLayer((payload) =>
           }
           yield* winner.request.respond(Exit.succeed(planCents));
           planCents = requested;
-          yield* setStateCell(SubscriptionStatus, { phase: "active", planCents, cyclesBilled });
+          yield* SubscriptionStatus.set({ phase: "active", planCents, cyclesBilled });
           break;
         }
         case "cancel": {
-          yield* setStateCell(SubscriptionStatus, { phase: "cancelled", planCents, cyclesBilled });
+          yield* SubscriptionStatus.set({ phase: "cancelled", planCents, cyclesBilled });
           return `cancelled(${winner.message.reason}) after ${cyclesBilled} cycles`;
         }
       }
