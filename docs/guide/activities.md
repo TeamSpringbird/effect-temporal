@@ -11,6 +11,19 @@ Both run under the same per-call cancellation scope. If you find yourself
 building a typed error channel on top of a raw call, that's the sign you
 wanted a `TypedActivity`.
 
+::: info Portability note
+Unlike workflow definitions — which are pure upstream API and run on any
+engine — `TypedActivity` and `callActivity` are this package's own, and a
+workflow using them is Temporal-shaped. That is a deliberate consequence of
+Temporal's execution model: upstream `Activity.make` carries its
+implementation as a **closure** over workflow state, which other engines can
+run in-process, but Temporal executes activities on a separate worker that a
+closure cannot reach. `TypedActivity` is the serializable projection that
+boundary forces: a name plus schemas, implemented on the worker. Upstream
+`Activity.make` still works here as an in-sandbox typed seam (see below) —
+it just isn't where I/O can live under Temporal.
+:::
+
 ## Typed activities
 
 Declare once; the definition is temporal-free and loads in the sandbox bundle, the worker, and clients alike.

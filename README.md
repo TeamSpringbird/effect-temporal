@@ -18,12 +18,21 @@ import { Effect, Schema } from "effect";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
+import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
+import { callActivity, workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
 import { WorkflowClient } from "@springbird/effect-temporal/client";
 
-// Define once — shared by the workflow bundle and every client.
+// Define once — shared by the workflow bundle, the worker, and every client.
 const OrderFlow = Workflow.make("orderFlow", {
   payload: { orderId: Schema.String },
   idempotencyKey: ({ orderId }) => orderId,
+  success: Schema.String,
+});
+const Charge = TypedActivity.make("charge", {
+  payload: { orderId: Schema.String },
+  success: Schema.String,
+});
+const ManagerApproval = DurableDeferred.make("manager-approval", {
   success: Schema.String,
 });
 
