@@ -111,12 +111,12 @@ await worker.runUntil(async () => {
       // Observe progress mid-flight through the state cell (a query — it
       // never perturbs the run).
       yield* Effect.sleep("1 second");
-      const status = yield* wf.readStateCell(OrderStatus, workflowId);
+      const status = yield* wf.readStateCell(OrderStatus.cell, workflowId);
       console.log("  status mid-flight:", Option.getOrElse(status, () => ({ phase: "?" })));
 
       // The manager approves — a signal from entirely outside the workflow.
-      yield* DurableDeferred.done(ManagerApproval, {
-        token: DurableDeferred.tokenFromExecutionId(ManagerApproval, {
+      yield* DurableDeferred.done(ManagerApproval.deferred, {
+        token: DurableDeferred.tokenFromExecutionId(ManagerApproval.deferred, {
           workflow: OrderSaga,
           executionId: workflowId,
         }),

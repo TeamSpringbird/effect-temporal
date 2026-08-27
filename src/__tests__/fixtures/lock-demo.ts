@@ -4,17 +4,17 @@
 
 import * as Schema from "effect/Schema";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableMailbox from "../../mailbox.js";
+import { defineMailbox } from "../../definition.js";
 
-export const AcquireRequests = DurableMailbox.make("acquire", {
+export const AcquireRequests = defineMailbox("acquire", {
   payload: Schema.Struct({ requester: Schema.String }),
 });
 
-export const Grants = DurableMailbox.make("grant", {
+export const Grants = defineMailbox("grant", {
   payload: Schema.Struct({ token: Schema.Finite }),
 });
 
-export const Releases = DurableMailbox.make("release", {
+export const Releases = defineMailbox("release", {
   payload: Schema.Struct({ token: Schema.Finite }),
 });
 

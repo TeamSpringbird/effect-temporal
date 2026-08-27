@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
-import { workflowBundle, setStateCell, takeUpdate } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../engine-sandbox.js";
 import {
   Approved,
   CurrentLanguage,
@@ -17,13 +17,13 @@ import {
 const MessageDemoLive = MessageDemo.toLayer(() =>
   Effect.gen(function* () {
     let language: string = SUPPORTED_LANGUAGES[0];
-    yield* setStateCell(CurrentLanguage, language);
+    yield* CurrentLanguage.set(language);
     while (true) {
       const winner = yield* Effect.raceFirst(
-        takeUpdate(SetLanguage).pipe(
+        SetLanguage.take.pipe(
           Effect.map((request) => ({ kind: "update" as const, request })),
         ),
-        DurableDeferred.await(Approved).pipe(
+        Approved.await.pipe(
           Effect.map((approver) => ({ kind: "approved" as const, approver })),
         ),
       );
@@ -34,7 +34,7 @@ const MessageDemoLive = MessageDemo.toLayer(() =>
       if ((SUPPORTED_LANGUAGES as readonly string[]).includes(requested)) {
         yield* winner.request.respond(Exit.succeed(language));
         language = requested;
-        yield* setStateCell(CurrentLanguage, language);
+        yield* CurrentLanguage.set(language);
       } else {
         yield* winner.request.respond(Exit.fail(`unsupported:${requested}`));
       }
@@ -47,8 +47,8 @@ const MessageDemoLive = MessageDemo.toLayer(() =>
  * for this sender. */
 const DeferredPokeDemoLive = DeferredPokeDemo.toLayer((payload) =>
   Effect.gen(function* () {
-    yield* DurableDeferred.done(Approved, {
-      token: DurableDeferred.tokenFromExecutionId(Approved, {
+    yield* DurableDeferred.done(Approved.deferred, {
+      token: DurableDeferred.tokenFromExecutionId(Approved.deferred, {
         workflow: MessageDemo,
         executionId: payload.targetExecutionId,
       }),

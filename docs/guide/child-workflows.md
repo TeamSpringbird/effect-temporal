@@ -5,7 +5,7 @@ Calling one workflow's `execute` inside another's body starts a Temporal **child
 ```ts
 const ParentDemoLive = ParentDemo.toLayer((payload) =>
   Effect.gen(function* () {
-    const reservation = yield* callActivity(Reserve, { sku: payload.sku, quantity: 1 });
+    const reservation = yield* Reserve({ sku: payload.sku, quantity: 1 });
 
     // Starts a Temporal child workflow; typed results and failures compose
     // into the parent like any Effect.

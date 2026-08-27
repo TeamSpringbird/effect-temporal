@@ -34,7 +34,7 @@ describe("early return via update", { concurrent: false }, () => {
 
       // The early return: confirmed before the run completes.
       const confirmation = await run(
-        executeUpdate(GetConfirmation, { client, workflowId: executionId, payload: {} }),
+        executeUpdate(GetConfirmation.update, { client, workflowId: executionId, payload: {} }),
       );
       expect(confirmation).toBe("confirmed");
       expect((await client.workflow.getHandle(executionId).describe()).status.name).toBe("RUNNING");

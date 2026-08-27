@@ -114,7 +114,7 @@ describe("payload codecs", { concurrent: false }, () => {
 
         // Update request/response, typed both ways.
         const previous = await run(
-          executeUpdate(SetLanguage, {
+          executeUpdate(SetLanguage.update, {
             client,
             workflowId: executionId,
             payload: { language: "french" },
@@ -123,7 +123,7 @@ describe("payload codecs", { concurrent: false }, () => {
         expect(previous).toBe("english");
         const rejected = await Effect.runPromise(
           Effect.result(
-            executeUpdate(SetLanguage, {
+            executeUpdate(SetLanguage.update, {
               client,
               workflowId: executionId,
               payload: { language: "klingon" },
@@ -134,14 +134,14 @@ describe("payload codecs", { concurrent: false }, () => {
 
         // State-cell query.
         const snapshot = await Effect.runPromise(
-          readStateCell(CurrentLanguage, { client, workflowId: executionId }),
+          readStateCell(CurrentLanguage.cell, { client, workflowId: executionId }),
         );
         expect(Option.isSome(snapshot) && snapshot.value).toBe("french");
 
         // Deferred-done signal + final result.
         await run(
-          DurableDeferred.done(Approved, {
-            token: DurableDeferred.tokenFromExecutionId(Approved, {
+          DurableDeferred.done(Approved.deferred, {
+            token: DurableDeferred.tokenFromExecutionId(Approved.deferred, {
               workflow: MessageDemo,
               executionId,
             }),
