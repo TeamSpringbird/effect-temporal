@@ -35,6 +35,7 @@ import * as Workflow from "effect/unstable/workflow/Workflow";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
+import { callActivity, workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
 import { WorkflowClient } from "@springbird/effect-temporal/client";
 
 // 1. Define once: shared by the workflow bundle, the worker, and every client.
