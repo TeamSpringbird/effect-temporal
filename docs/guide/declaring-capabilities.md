@@ -45,6 +45,10 @@ Every in-handler operation requires exactly one service, `WorkflowOps` — the s
 
 Each declaration carries its **underlying primitive** — `Approval.deferred`, `Priority.mailbox`, `SetAmount.update`, `Status.cell`, and a defined activity *is* its `TypedActivity` — which is what the client-side surfaces (`WorkflowClient`, the standalone `engine-client` operations, `DurableDeferred.done`) take. The low-level modules (`/typed-activity`, `/mailbox`, `/update`, `/state-cell`) are those definitions; `define*` is the one-declaration surface over them.
 
+::: info Schemas must be context-free
+A declaration's schemas cross the ops seam with their service requirements erased — a schema that needs decoding or encoding services would defect at runtime. Use plain, self-contained schemas at declaration boundaries.
+:::
+
 ## Wire identity is the name
 
 The explicit name string — `"charge"`, `"order/approval"` — is the identity on the wire: the Temporal activity type, signal payload discriminator, query key, patch-marker site. Renaming a variable, moving a declaration to another module, or restructuring the handler never changes the wire; changing the *name* does, and is a versioning event.

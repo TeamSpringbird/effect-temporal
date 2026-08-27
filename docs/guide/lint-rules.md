@@ -42,7 +42,7 @@ Two presets ship: `recommended` (all five rules, `prefer-call-temporal-activity`
 
 ## Scope
 
-A file counts as workflow code when it imports `@temporalio/workflow` or the `engine-sandbox` module — the rules are inert elsewhere, so enabling them repo-wide is safe. `no-mixed-halves` applies everywhere by nature.
+A file counts as workflow code when it imports `@temporalio/workflow` or the `engine-sandbox` module — the rules are inert elsewhere, so enabling them repo-wide is safe. `no-mixed-halves` applies everywhere by nature. `versioning-on-main-fiber` has one more trigger: importing `version` from the [definition module](/guide/declaring-capabilities) marks the file for that rule (alias-aware), since definition-authored handler modules deliberately import nothing engine-shaped. The other sandbox rules cannot see such modules — a handler that needs them linted can live next to its bundle entry, which imports `engine-sandbox`.
 
 The remaining footguns — drain mailboxes before `continueAsNew`, respond to updates before completion — are runtime-shaped and covered by runtime guards and the guide instead.
 

@@ -28,7 +28,7 @@ import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/c
 import type { PayloadOf, SuccessOf } from "./client.js";
 import { WorkflowOps, type UpdateRequest, type WorkflowOpsRuntime } from "./definition.js";
 import { codecsFor } from "./typed-activity.js";
-import { wireCodecsFor } from "./wire.js";
+import { wireCodecsFor, wireValueCodec } from "./wire.js";
 
 /**
  * One recorded `workflow.start` call, as the fake captured it.
@@ -462,11 +462,14 @@ export interface TestWorkflowOps {
  * yield* world.resolve(Approval, "ben");
  * ```
  *
- * Activity calls run their bound handlers with the payload round-tripped
- * through the declaration's schema (as the wire would); typed failures land
- * in the error channel, everything else is a defect. A call to an activity
- * with no binding dies loudly. `version` always answers the newest name —
- * there is no replay in memory.
+ * Every declared channel round-trips its values through the declaration's
+ * own schema, exactly as the wire would: activity payloads, successes, and
+ * typed failures; mailbox and update payloads; update responses; state
+ * values; deferred completions. A value that fails its schema is a defect
+ * here AND on Temporal — the memory test catches what production would.
+ * A call to an activity with no binding dies loudly, responding twice to
+ * one update dies (as the engine does), and `version` always answers the
+ * newest name — there is no replay in memory.
  *
  * @since 0.3.0
  * @category constructors
@@ -503,6 +506,13 @@ export const makeTestWorkflowOps = (options?: {
         });
       });
 
+    // Encode-then-decode through the declaration's own schema — the same
+    // trip the real wire takes, so schema-invalid values defect here too.
+    const roundTrip = (schema: Schema.Top, value: unknown): unknown => {
+      const codec = wireValueCodec(schema);
+      return codec.decode(codec.encode(value));
+    };
+
     const runtime: WorkflowOpsRuntime = {
       activity: (activity, payload) =>
         Effect.suspend(() => {
@@ -516,14 +526,46 @@ export const makeTestWorkflowOps = (options?: {
           const validated = codecs.payload.decode(codecs.payload.encode(payload));
           return Effect.flatten(
             Effect.promise(() => binding.execute(validated as never, runner)),
+          ).pipe(
+            Effect.map((value) => codecs.success.decode(codecs.success.encode(value))),
+            Effect.mapError((error) => codecs.error.decode(codecs.error.encode(error))),
           );
         }),
-      deferredAwait: (deferred) => Deferred.await(deferredFor(deferred)),
-      mailboxTake: (mailbox) => Effect.flatMap(queueFor(mailboxes, mailbox), Queue.take),
-      mailboxPoll: (mailbox) => Effect.flatMap(queueFor(mailboxes, mailbox), Queue.poll),
-      updateTake: (update) => Effect.flatMap(queueFor(updates, update), Queue.take),
-      stateSet: (cell, value) => Effect.sync(() => void cells.set(cell, value)),
-      version: (_site, names) => Effect.succeed(names[names.length - 1]!),
+      deferredAwait: (deferred) =>
+        Effect.map(Deferred.await(deferredFor(deferred)), (value) =>
+          // SAFETY: upstream bounds successSchema as Schema.Constraint, but
+          // every constructible deferred carries a real (Top) schema.
+          roundTrip(deferred.successSchema as unknown as Schema.Top, value),
+        ),
+      mailboxTake: (mailbox) =>
+        Effect.map(Effect.flatMap(queueFor(mailboxes, mailbox), Queue.take), (value) =>
+          roundTrip(mailbox.payloadSchema, value),
+        ),
+      mailboxPoll: (mailbox) =>
+        Effect.map(Effect.flatMap(queueFor(mailboxes, mailbox), Queue.poll), (value) =>
+          Option.map(value, (payload) => roundTrip(mailbox.payloadSchema, payload)),
+        ),
+      updateTake: (update) =>
+        Effect.map(Effect.flatMap(queueFor(updates, update), Queue.take), (request) => {
+          let responded = false;
+          return {
+            payload: roundTrip(update.payloadSchema, request.payload),
+            respond: (exit: Exit.Exit<unknown, unknown>) =>
+              Effect.suspend(() => {
+                if (responded) {
+                  return Effect.die(new Error(`respond called twice for update "${update.name}"`));
+                }
+                responded = true;
+                const wired = Exit.isSuccess(exit)
+                  ? Exit.succeed(roundTrip(update.successSchema, exit.value))
+                  : Exit.mapError(exit, (error) => roundTrip(update.errorSchema, error));
+                return request.respond(wired);
+              }),
+          };
+        }),
+      stateSet: (cell, value) =>
+        Effect.sync(() => void cells.set(cell, roundTrip(cell.valueSchema, value))),
+      version: (_site, names) => Effect.succeed(names[names.length - 1] ?? names[0]),
     };
 
     const world: TestWorkflowOps = {

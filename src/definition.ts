@@ -60,6 +60,10 @@ export interface UpdateRequest<P, S, E> {
  * per primitive kind, dispatching on the declaration instances. The typed
  * surfaces below narrow this seam exactly once each.
  *
+ * Declaration schemas must be context-free: a schema requiring decoding or
+ * encoding services would have that requirement erased by this seam and
+ * defect at runtime.
+ *
  * @since 0.3.0
  * @category models
  */
@@ -81,7 +85,10 @@ export interface WorkflowOpsRuntime {
     update: DurableUpdate.DurableUpdate<Schema.Top, Schema.Top, Schema.Top>,
   ) => Effect.Effect<UpdateRequest<unknown, unknown, unknown>>;
   readonly stateSet: (cell: StateCell.StateCell<Schema.Top>, value: unknown) => Effect.Effect<void>;
-  readonly version: (site: string, names: ReadonlyArray<string>) => Effect.Effect<string>;
+  readonly version: <const Names extends readonly [string, ...string[]]>(
+    site: string,
+    names: Names,
+  ) => Effect.Effect<Names[number]>;
 }
 
 /**
@@ -141,6 +148,8 @@ export const defineActivity = <
   Success,
   Error
 > => {
+  // The generic bounds, defaults, and Struct.Fields conditional above
+  // mirror TypedActivity.make — keep the two in sync.
   const activity = TypedActivity.make(name, decl);
   const call = (payload: unknown) =>
     Effect.flatMap(WorkflowOps, (runtime) => runtime.activity(activity, payload));
@@ -170,7 +179,7 @@ export const defineDeferred = <Success extends Schema.Constraint>(
     name,
     deferred,
     await: Effect.flatMap(WorkflowOps, (runtime) =>
-      runtime.deferredAwait(deferred as DurableDeferred.DurableDeferred<Schema.Constraint>),
+      runtime.deferredAwait(deferred),
     ) as Effect.Effect<Success["Type"], never, WorkflowOps>,
   } as const;
 };
@@ -263,9 +272,7 @@ export const version = <const Names extends readonly [string, ...string[]]>(
   site: string,
   names: Names,
 ): Effect.Effect<Names[number], never, WorkflowOps> =>
-  Effect.flatMap(WorkflowOps, (runtime) =>
-    runtime.version(site, names),
-  ) as Effect.Effect<Names[number], never, WorkflowOps>;
+  Effect.flatMap(WorkflowOps, (runtime) => runtime.version(site, names));
 
 // ─── Schema evolution ────────────────────────────────────────────────────────
 

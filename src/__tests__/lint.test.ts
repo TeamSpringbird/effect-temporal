@@ -39,6 +39,16 @@ export const c = callRawActivity(() => acts.foo());
 export const v = version("site", ["v1", "v2"]);
 `;
 
+// A definition-authored handler module imports NO engine module — the
+// `version` import alone must mark it for the versioning rule.
+const DEFINITION_ONLY = `
+import * as Effect from "effect/Effect";
+import { version as pickVersion } from "@springbird/effect-temporal/definition";
+
+export const bad = Effect.forkChild(pickVersion("site", ["v1", "v2"]));
+export const fine = pickVersion("site", ["v1", "v2"]);
+`;
+
 const runOxlint = (directory: string, files: string[]) => {
   const config = join(directory, ".oxlintrc.json");
   writeFileSync(config, JSON.stringify({ extends: [presetPath] }));
@@ -51,10 +61,12 @@ describe("lint plugin", { concurrent: false }, () => {
     const directory = mkdtempSync(join(tmpdir(), "effect-workflow-lint-"));
     const bad = join(directory, "bad.ts");
     const good = join(directory, "good.ts");
+    const definitionOnly = join(directory, "definition-only.ts");
     writeFileSync(bad, BAD);
     writeFileSync(good, GOOD);
+    writeFileSync(definitionOnly, DEFINITION_ONLY);
 
-    const output = runOxlint(directory, [bad, good]);
+    const output = runOxlint(directory, [bad, good, definitionOnly]);
 
     for (const rule of [
       "zero-arity-effect-promise",
@@ -70,5 +82,11 @@ describe("lint plugin", { concurrent: false }, () => {
       .split("\n")
       .filter((line) => line.includes("good.ts") && line.includes("effect-temporal("));
     expect(goodFindings).toEqual([]);
+
+    // The definition-only module (no engine imports, aliased `version`) is
+    // still covered by the versioning rule — exactly one finding, the fork.
+    const definitionOutput = runOxlint(directory, [definitionOnly]);
+    expect(definitionOutput).toContain("effect-temporal(versioning-on-main-fiber)");
+    expect(definitionOutput.match(/effect-temporal\(/g)).toHaveLength(1);
   }, 60_000);
 });

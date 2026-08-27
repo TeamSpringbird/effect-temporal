@@ -97,7 +97,11 @@ import {
 } from "./mailbox.js";
 import { STATE_CELL_QUERY, stateCellCodec, type StateCell } from "./state-cell.js";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
-import { WorkflowOps, type WorkflowOpsRuntime } from "./definition.js";
+import {
+  WorkflowOps,
+  type UpdateRequest as DefUpdateRequest,
+  type WorkflowOpsRuntime,
+} from "./definition.js";
 import * as Versioning from "./versioning.js";
 import {
   updateCodec,
@@ -340,10 +344,11 @@ const updateBuffer = (run: RunState, name: string): PendingUpdate[] => {
  * @since 0.1.0
  * @category models
  */
-export interface UpdateRequest<S extends Schema.Top, E extends Schema.Top, P> {
-  readonly payload: P;
-  readonly respond: (exit: Exit.Exit<S["Type"], E["Type"]>) => Effect.Effect<void>;
-}
+export type UpdateRequest<S extends Schema.Top, E extends Schema.Top, P> = DefUpdateRequest<
+  P,
+  S["Type"],
+  E["Type"]
+>;
 
 /**
  * Durably await the next `executeUpdate` request for `update`, in delivery
@@ -1069,25 +1074,33 @@ const buildRegistry = (
     return registry;
   });
 
+/** Forget ONLY the requirements of a sandbox op; success and error survive. */
+const eraseR = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E> =>
+  effect as Effect.Effect<A, E>;
+
 /**
  * The Temporal implementation of the declared-workflow ops seam: every
  * operation dispatches into this module's machinery. Provided automatically
  * to the layers `workflowBundle` hosts.
  *
+ * Module-private on purpose: outside `workflowBundle`'s per-run wrapper the
+ * erased sandbox services are missing and every op would die at call time.
+ *
  * @since 0.3.0
  * @category workflow
  */
-export const temporalWorkflowOps: WorkflowOpsRuntime = {
-  // SAFETY: each op requires SandboxRun (and the engine) at the type level;
-  // the per-run wrapper provides them — same discipline as SandboxHandler.
-  activity: (activity, payload) => callActivity(activity, payload as never) as never,
-  deferredAwait: (deferred) => DurableDeferred.await(deferred) as never,
-  mailboxTake: (mailbox) => takeMailbox(mailbox) as never,
-  mailboxPoll: (mailbox) => pollMailbox(mailbox) as never,
-  updateTake: (update) => takeUpdate(update) as never,
-  stateSet: (cell, value) => setStateCell(cell, value) as never,
-  version: (site, names) =>
-    Versioning.version(site, names as unknown as readonly [string, ...string[]]),
+const temporalWorkflowOps: WorkflowOpsRuntime = {
+  // SAFETY: eraseR removes ONLY the R channel — each op requires SandboxRun
+  // (and the engine services) at the type level, and the per-run wrapper
+  // provides them, same discipline as SandboxHandler. Success and error
+  // shapes stay compile-checked against the seam.
+  activity: (activity, payload) => eraseR(callActivity(activity, payload)),
+  deferredAwait: (deferred) => eraseR(DurableDeferred.await(deferred)),
+  mailboxTake: (mailbox) => eraseR(takeMailbox(mailbox)),
+  mailboxPoll: (mailbox) => eraseR(pollMailbox(mailbox)),
+  updateTake: (update) => eraseR(takeUpdate(update)),
+  stateSet: (cell, value) => eraseR(setStateCell(cell, value)),
+  version: (site, names) => Versioning.version(site, names),
 };
 
 /**

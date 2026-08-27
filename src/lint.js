@@ -176,7 +176,25 @@ const rules = {
     ...sandboxRule((_context, state) => {
       const FORKING = ["forkChild", "forkDetach", "raceFirst", "race", "raceAll", "all"];
       let forkDepth = 0;
+      let definedVersionLocal = null;
       return {
+        // Definition-authored handler modules import no engine module on
+        // purpose — importing `version` from the definition module is what
+        // marks the file as workflow code for THIS rule (alias-aware).
+        ImportDeclaration(node) {
+          const source = node.source.value;
+          if (
+            typeof source === "string" &&
+            (source.endsWith("/definition") || source.endsWith("/definition.js"))
+          ) {
+            for (const specifier of node.specifiers ?? []) {
+              if (specifier.type === "ImportSpecifier" && specifier.imported?.name === "version") {
+                definedVersionLocal = specifier.local.name;
+                state.sandbox = true;
+              }
+            }
+          }
+        },
         CallExpression(node) {
           if (isEffectCall(node, FORKING)) {
             forkDepth++;
@@ -188,7 +206,8 @@ const rules = {
             node.callee.object.name === "Versioning";
           // The definition module's bare `version(site, names)` call.
           const isDefinedVersion =
-            node.callee.type === "Identifier" && node.callee.name === "version";
+            node.callee.type === "Identifier" &&
+            node.callee.name === (definedVersionLocal ?? "version");
           if (forkDepth > 0 && (isVersioningMember || isDefinedVersion)) {
             state.reports.push({ node, messageId: "fiber" });
           }
