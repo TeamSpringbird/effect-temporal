@@ -3,9 +3,11 @@
 // everything unconfigured.
 
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import { describe, expect, it } from "vitest";
 import { makeWorkflowClient } from "../client.js";
 import { decodeWorkflowResult, makeFakeTemporalClient, simulateAlreadyStarted } from "../testing.js";
+import { wireCodecsFor } from "../wire.js";
 import { Demo } from "./fixtures/demo.js";
 
 const payload = { requestId: "fake-1", mode: "approve" } as const;
@@ -84,5 +86,11 @@ describe("decodeWorkflowResult", () => {
         cause: [{ _tag: "Fail", error: "typed-failure" }],
       }),
     ).toThrow(/did not succeed/);
+  });
+
+  it("preserves native defect details in the thrown message", () => {
+    const wire = wireCodecsFor(Demo).encodeExit(Exit.die(new Error("boom")));
+
+    expect(() => decodeWorkflowResult(Demo, wire)).toThrow(/boom/);
   });
 });
