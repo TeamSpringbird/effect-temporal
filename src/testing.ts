@@ -14,6 +14,7 @@
  * @since 0.1.0
  */
 
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import type * as Schema from "effect/Schema";
@@ -256,7 +257,7 @@ export const decodeWorkflowResult = <W extends Workflow.Any>(
   // SAFETY: the exit was decoded through the workflow's own success schema,
   // so the success value is SuccessOf<W> — the codec seam types it unknown.
   if (Exit.isSuccess(exit)) return exit.value as SuccessOf<W>;
-  throw new Error(`workflow "${workflow._tag}" did not succeed: ${JSON.stringify(exit.cause)}`);
+  throw new Error(`workflow "${workflow._tag}" did not succeed: ${Cause.pretty(exit.cause)}`);
 };
 
 /**
