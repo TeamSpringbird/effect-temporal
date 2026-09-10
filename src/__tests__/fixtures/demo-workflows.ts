@@ -8,7 +8,6 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import { proxyActivities } from "@temporalio/workflow";
 import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
@@ -65,7 +64,7 @@ const DemoLive = Demo.toLayer((payload) =>
       return yield* Effect.fail("business-failure");
     }
 
-    const approver = yield* DurableDeferred.await(Approval);
+    const approver = yield* Approval.await;
     return `${reservation}|approved-by:${approver}`;
   }),
 );

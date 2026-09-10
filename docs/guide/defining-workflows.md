@@ -36,7 +36,7 @@ export default workflowBundle(Layer.mergeAll(OrderFlowLive /*, ... */));
 
 This is the same registration-driven authoring Effect's cluster and in-memory engines use — the workflow code is engine-agnostic, and choosing Temporal is choosing this default export plus the client half's engine layer. Handlers can require services provided by ordinary Layers composed into the registration environment (`Layer.provide` on the merged layer).
 
-The handler receives the decoded payload and the execution id. Everything effectful must reach the outside world through an activity call — see [Activities](/guide/activities) and the [authoring rules](/guide/lint-rules).
+The handler receives the decoded payload and the execution id. Everything effectful must reach the outside world through an activity call — see [Declaring capabilities](/guide/declaring-capabilities), [Activities](/guide/activities), and the [authoring rules](/guide/lint-rules).
 
 ## One definition, three call sites
 

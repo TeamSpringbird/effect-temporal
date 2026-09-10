@@ -6,13 +6,15 @@
 
 import { Schema } from "effect";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableMailbox from "@springbird/effect-temporal/mailbox";
-import * as DurableUpdate from "@springbird/effect-temporal/update";
-import * as StateCell from "@springbird/effect-temporal/state-cell";
-import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
+import {
+  defineActivity,
+  defineMailbox,
+  defineState,
+  defineUpdate,
+} from "@springbird/effect-temporal/definition";
 
 /** One billing cycle's charge. */
-export const ChargeCard = TypedActivity.make("chargeCard", {
+export const ChargeCard = defineActivity("chargeCard", {
   payload: { customerId: Schema.String, amountCents: Schema.Finite },
   success: Schema.String, // receipt id
   options: { startToCloseTimeout: "10 seconds", retry: { maximumAttempts: 3 } },
@@ -23,20 +25,20 @@ export const ChargeCard = TypedActivity.make("chargeCard", {
  * the caller gets the PREVIOUS plan back as the typed success, or a typed
  * rejection for plans below the floor.
  */
-export const SetPlan = DurableUpdate.make("set-plan", {
+export const SetPlan = defineUpdate("set-plan", {
   payload: Schema.Struct({ planCents: Schema.Finite }),
   success: Schema.Finite, // the previous plan
   error: Schema.String, // "plan-below-minimum"
 });
 
 /** Cancellation requests — fire-and-forget inbound messages. */
-export const CancelRequests = DurableMailbox.make("cancel-requests", {
+export const CancelRequests = defineMailbox("cancel-requests", {
   payload: Schema.Struct({ reason: Schema.String }),
 });
 
 /** Observable state, readable mid-flight and after the run closes. Cells
  * are per-run: each continue-as-new republishes. */
-export const SubscriptionStatus = StateCell.make("subscription-status", {
+export const SubscriptionStatus = defineState("subscription-status", {
   value: Schema.Struct({
     phase: Schema.String,
     planCents: Schema.Finite,

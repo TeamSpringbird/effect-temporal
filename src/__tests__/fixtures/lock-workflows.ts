@@ -5,12 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
-import {
-  callRawActivity,
-  workflowBundle,
-  offerMailbox,
-  takeMailbox,
-} from "../../engine-sandbox.js";
+import { callRawActivity, workflowBundle, offerMailbox } from "../../engine-sandbox.js";
 import { AcquireRequests, ContenderDemo, Grants, LockDemo, Releases } from "./lock-demo.js";
 
 const acts = proxyActivities<{
@@ -23,9 +18,9 @@ const acts = proxyActivities<{
 const LockDemoLive = LockDemo.toLayer((payload) =>
   Effect.gen(function* () {
     for (let token = 0; token < payload.grants; token++) {
-      const request = yield* takeMailbox(AcquireRequests);
-      yield* offerMailbox(Grants, { workflowId: request.requester, payload: { token } });
-      while ((yield* takeMailbox(Releases)).token !== token) {
+      const request = yield* AcquireRequests.take;
+      yield* offerMailbox(Grants.mailbox, { workflowId: request.requester, payload: { token } });
+      while ((yield* Releases.take).token !== token) {
         // A stale release from a misbehaving holder never unlocks a newer
         // grant.
       }
@@ -36,11 +31,11 @@ const LockDemoLive = LockDemo.toLayer((payload) =>
 
 const ContenderDemoLive = ContenderDemo.toLayer((payload, executionId) =>
   Effect.gen(function* () {
-    yield* offerMailbox(AcquireRequests, {
+    yield* offerMailbox(AcquireRequests.mailbox, {
       workflowId: payload.lockExecutionId,
       payload: { requester: executionId },
     });
-    const grant = yield* takeMailbox(Grants);
+    const grant = yield* Grants.take;
 
     yield* Activity.make({
       name: "enter",
@@ -53,7 +48,7 @@ const ContenderDemoLive = ContenderDemo.toLayer((payload, executionId) =>
       execute: callRawActivity(() => acts.leave(payload.name)),
     });
 
-    yield* offerMailbox(Releases, {
+    yield* offerMailbox(Releases.mailbox, {
       workflowId: payload.lockExecutionId,
       payload: { token: grant.token },
     });

@@ -3,7 +3,7 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { workflowBundle, setStateCell, takeMailbox } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../engine-sandbox.js";
 import {
   DeadlineUpdates,
   StateDemo,
@@ -16,11 +16,11 @@ const StateDemoLive = StateDemo.toLayer(() =>
   Effect.gen(function* () {
     const state = new Map<string, number>();
     while (true) {
-      const update = yield* takeMailbox(StateUpdates);
+      const update = yield* StateUpdates.take;
       if (update.op === "finish") break;
       if (update.op === "set") state.set(update.key, update.value);
       else state.delete(update.key);
-      yield* setStateCell(StateSnapshot, Object.fromEntries(state));
+      yield* StateSnapshot.set(Object.fromEntries(state));
     }
     return Array.from(state.entries())
       .toSorted(([a], [b]) => a.localeCompare(b))
@@ -35,7 +35,7 @@ const UpdatableTimerDemoLive = UpdatableTimerDemo.toLayer((payload) =>
     let updates = 0;
     while (true) {
       const winner = yield* Effect.raceFirst(
-        takeMailbox(DeadlineUpdates).pipe(
+        DeadlineUpdates.take.pipe(
           Effect.map((update) => ({ kind: "update" as const, update })),
         ),
         DurableClock.sleep({

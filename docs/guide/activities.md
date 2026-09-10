@@ -4,34 +4,36 @@ All I/O in a workflow body goes through a Temporal activity. Two forms exist, an
 
 | Form | Use when | Wire | Failure semantics |
 | --- | --- | --- | --- |
-| **Typed** — `TypedActivity.make` + `callActivity` + `implementActivities` | you implement the activity — **the default** | schema-validated both ways | typed failures land in the Effect error channel, non-retryable; infra errors retry then die |
+| **Declared** — `defineActivity` + a direct call + `implementActivities` | you implement the activity — **the default** | schema-validated both ways | typed failures land in the Effect error channel, non-retryable; infra errors retry then die |
 | **Raw** — `proxyActivities` + `callRawActivity` | the activity is not yours (existing Temporal activities, another team's worker), or you need proxy options per call site | whatever the proxy's functions take, unvalidated | everything thrown is a defect once retries exhaust; no typed channel |
 
 Both run under the same per-call cancellation scope. If you find yourself
 building a typed error channel on top of a raw call, that's the sign you
-wanted a `TypedActivity`.
+wanted `defineActivity`.
 
 ::: info Portability note
-Unlike workflow definitions — which are pure upstream API and run on any
-engine — `TypedActivity` and `callActivity` are this package's own, and a
-workflow using them is Temporal-shaped. That is a deliberate consequence of
-Temporal's execution model: upstream `Activity.make` carries its
-implementation as a **closure** over workflow state, which other engines can
-run in-process, but Temporal executes activities on a separate worker that a
-closure cannot reach. `TypedActivity` is the serializable projection that
-boundary forces: a name plus schemas, implemented on the worker. Upstream
-`Activity.make` still works here as an in-sandbox typed seam (see below) —
-it just isn't where I/O can live under Temporal.
+A handler that calls declared activities depends on exactly one service —
+`WorkflowOps`, the seam an engine implements — and imports nothing
+engine-shaped: `workflowBundle` provides the Temporal runtime, the
+[in-memory runtime](/guide/testing#the-in-memory-runtime) provides another,
+and the same handler runs on both. Underneath the declaration is
+`TypedActivity`, the *serializable projection* Temporal's execution model
+forces: upstream `Activity.make` carries its implementation as a **closure**
+over workflow state, which an in-process engine can run, but Temporal
+executes activities on a separate worker that a closure cannot reach — so
+what crosses the boundary must be a name plus schemas, implemented on the
+worker. Upstream `Activity.make` still works here as an in-sandbox typed
+seam (see below) — it just isn't where I/O can live under Temporal.
 :::
 
-## Typed activities
+## Declared activities
 
-Declare once; the definition is temporal-free and loads in the sandbox bundle, the worker, and clients alike.
+Declare once; the declaration is temporal-free and loads in the sandbox bundle, the worker, and clients alike.
 
 ```ts
-import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
+import { defineActivity } from "@springbird/effect-temporal/definition";
 
-export const Reserve = TypedActivity.make("reserve", {
+export const Reserve = defineActivity("reserve", {
   payload: { sku: Schema.String, quantity: Schema.Finite },
   success: Schema.String,
   error: Schema.TaggedStruct("OutOfStock", { sku: Schema.String }),
@@ -39,16 +41,14 @@ export const Reserve = TypedActivity.make("reserve", {
 });
 ```
 
-Call it from a workflow body with `callActivity`:
+Call it directly from a workflow body:
 
 ```ts
-import { callActivity } from "@springbird/effect-temporal/engine-sandbox";
-
-const reservation = yield* callActivity(Reserve, { sku, quantity: 1 });
+const reservation = yield* Reserve({ sku, quantity: 1 });
 // reservation: string; error channel: { _tag: "OutOfStock"; sku: string }
 ```
 
-The payload is schema-encoded onto the wire and validated before the implementation runs; the result decodes back; a typed failure lands in the Effect error channel.
+The payload is schema-encoded onto the wire and validated before the implementation runs; the result decodes back; a typed failure lands in the Effect error channel. The call requires only `WorkflowOps` — no imports from the sandbox module.
 
 ### Failure and retry semantics
 
@@ -59,7 +59,7 @@ The line between the two failure kinds is the line between domain outcomes and i
 
 ### Implementing on the worker
 
-`implementActivities` binds definitions to Effect handlers over an `ActivityRunner` — the seam where your runtime, spans, and error reporting live:
+`implementActivities` binds declarations to Effect handlers over an `ActivityRunner` — the seam where your runtime, spans, and error reporting live. A declared activity *is* its `TypedActivity` (name plus schemas), so `handle` takes it directly:
 
 ```ts
 import { handle, implementActivities, type ActivityRunner } from "@springbird/effect-temporal/activities";
@@ -110,14 +110,14 @@ const paid = yield* Activity.make({
 });
 ```
 
-Be clear about what that wrapper is: under this engine `Activity.make` is a **typed seam in the Effect program, not a Temporal Activity** — it gives the step a name, Effect-level success/error schemas, and `Activity.CurrentAttempt` in context, while durability still comes entirely from the `callRawActivity` inside it. It does **not** validate the wire or create a typed failure channel from the worker — that's what `TypedActivity` is for. Wrap a raw call when the step deserves a name and a schema'd shape in your program (the fixtures do it because they mirror the upstream API's style); call `callRawActivity` bare when it doesn't.
+Be clear about what that wrapper is: under this engine `Activity.make` is a **typed seam in the Effect program, not a Temporal Activity** — it gives the step a name, Effect-level success/error schemas, and `Activity.CurrentAttempt` in context, while durability still comes entirely from the `callRawActivity` inside it. It does **not** validate the wire or create a typed failure channel from the worker — that's what `defineActivity` is for. Wrap a raw call when the step deserves a name and a schema'd shape in your program (the fixtures do it because they mirror the upstream API's style); call `callRawActivity` bare when it doesn't.
 
 ## Cancellation reaches the server
 
-Both `callActivity` and `callRawActivity` run under a per-call cancellation scope. When the calling fiber is interrupted — the workflow is cancelled, an `Effect.timeout` fires, an `Effect.race` is lost — the in-flight server-side activity is **cancelled**, not abandoned:
+Declared activity calls and `callRawActivity` run under a per-call cancellation scope. When the calling fiber is interrupted — the workflow is cancelled, an `Effect.timeout` fires, an `Effect.race` is lost — the in-flight server-side activity is **cancelled**, not abandoned:
 
 ```ts
-const result = yield* callActivity(Slow, payload).pipe(
+const result = yield* Slow(payload).pipe(
   Effect.timeoutOption("30 seconds"),
 ); // None on timeout; the server-side activity receives a cancellation request
 ```

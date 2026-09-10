@@ -43,15 +43,15 @@ describe("DurableMailbox over Temporal", { concurrent: false }, () => {
       const payload = { requestId: "state-1" } as const;
       const executionId = await run(StateDemo.execute(payload, { discard: true }));
 
-      const offer = (message: (typeof StateUpdates)["payloadSchema"]["Type"]) =>
+      const offer = (message: (typeof StateUpdates)["mailbox"]["payloadSchema"]["Type"]) =>
         Effect.runPromise(
-          offerMailbox(StateUpdates, { client, workflowId: executionId, payload: message }),
+          offerMailbox(StateUpdates.mailbox, { client, workflowId: executionId, payload: message }),
         );
 
       // A signal and a query race through separate workflow tasks, so
       // mid-flight reads poll until the published snapshot catches up.
       const readSnapshot = () =>
-        Effect.runPromise(readStateCell(StateSnapshot, { client, workflowId: executionId }));
+        Effect.runPromise(readStateCell(StateSnapshot.cell, { client, workflowId: executionId }));
       const readUntil = async (expected: Record<string, number>) => {
         for (let i = 0; i < 50; i++) {
           const snapshot = await readSnapshot();
@@ -101,7 +101,7 @@ describe("DurableMailbox over Temporal", { concurrent: false }, () => {
 
       for (const millis of [300_000, 120_000]) {
         await Effect.runPromise(
-          offerMailbox(DeadlineUpdates, { client, workflowId: executionId, payload: { millis } }),
+          offerMailbox(DeadlineUpdates.mailbox, { client, workflowId: executionId, payload: { millis } }),
         );
       }
 
@@ -132,9 +132,9 @@ describe("DurableMailbox over Temporal", { concurrent: false }, () => {
       });
 
       // Well-formed messages after the junk still apply, in order.
-      const offer = (message: (typeof StateUpdates)["payloadSchema"]["Type"]) =>
+      const offer = (message: (typeof StateUpdates)["mailbox"]["payloadSchema"]["Type"]) =>
         Effect.runPromise(
-          offerMailbox(StateUpdates, { client, workflowId: executionId, payload: message }),
+          offerMailbox(StateUpdates.mailbox, { client, workflowId: executionId, payload: message }),
         );
       await offer({ op: "set", key: "a", value: 1 });
       await offer({ op: "set", key: "b", value: 2 });
@@ -149,7 +149,7 @@ describe("DurableMailbox over Temporal", { concurrent: false }, () => {
   it("drops offers to closed executions instead of failing", async () => {
     await temporal.withWorker({ activities, workflowsPath }, async () => {
       await Effect.runPromise(
-        offerMailbox(StateUpdates, {
+        offerMailbox(StateUpdates.mailbox, {
           client: temporal.env.client,
           workflowId: "effect-mailbox-never-started",
           payload: { op: "finish" },

@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import { condition } from "@temporalio/workflow";
-import { workflowBundle, takeUpdate } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../engine-sandbox.js";
 import { GetConfirmation, TransactionDemo } from "./transaction-demo.js";
 
 const TransactionDemoLive = TransactionDemo.toLayer(() =>
@@ -15,7 +15,7 @@ const TransactionDemoLive = TransactionDemo.toLayer(() =>
 
     yield* Effect.forkChild(
       Effect.gen(function* () {
-        const request = yield* takeUpdate(GetConfirmation);
+        const request = yield* GetConfirmation.take;
         // condition() is a durable workflow wait, not activity I/O.
         // oxlint-disable-next-line effect-temporal/prefer-call-temporal-activity
         yield* Effect.promise(() => condition(() => state.confirmed));

@@ -1,12 +1,12 @@
 # Updates
 
-A `DurableUpdate` is request/response into a running workflow — Temporal updates with typed channels. Unlike a fire-and-forget [mailbox](/guide/mailboxes) message, the caller blocks for the workflow's answer and receives the handler's typed success **or typed failure** back in its own Effect channels.
+An update is request/response into a running workflow — Temporal updates with typed channels. Unlike a fire-and-forget [mailbox](/guide/mailboxes) message, the caller blocks for the workflow's answer and receives the handler's typed success **or typed failure** back in its own Effect channels.
 
 ```ts
 // definitions
-import * as DurableUpdate from "@springbird/effect-temporal/update";
+import { defineUpdate } from "@springbird/effect-temporal/definition";
 
-export const SetLanguage = DurableUpdate.make("set-language", {
+export const SetLanguage = defineUpdate("set-language", {
   payload: Schema.Struct({ language: Schema.String }),
   success: Schema.String, // the previous language
   error: Schema.String,   // "unsupported:<lang>"
@@ -15,14 +15,12 @@ export const SetLanguage = DurableUpdate.make("set-language", {
 
 ## Serving requests (workflow side)
 
-`takeUpdate` durably awaits the next request, in delivery order; each request carries a one-shot `respond`:
+`.take` durably awaits the next request, in delivery order; each request carries a one-shot `respond`:
 
 ```ts
-import { takeUpdate } from "@springbird/effect-temporal/engine-sandbox";
-
 let language = "english";
 while (true) {
-  const request = yield* takeUpdate(SetLanguage);
+  const request = yield* SetLanguage.take;
   const requested = request.payload.language;
   if (SUPPORTED.includes(requested)) {
     yield* request.respond(Exit.succeed(language)); // answer: the previous value
@@ -42,9 +40,11 @@ Rules of the road:
 
 ## Calling (client side)
 
+Callers address the declaration's underlying primitive, `SetLanguage.update`:
+
 ```ts
 const wf = yield* WorkflowClient;
-const previous = yield* wf.executeUpdate(SetLanguage, workflowId, { language: "french" });
+const previous = yield* wf.executeUpdate(SetLanguage.update, workflowId, { language: "french" });
 // success channel: string (previous language)
 // error channel: string (typed failure from respond)
 ```
@@ -54,7 +54,7 @@ Without the service — the standalone form `WorkflowClient` delegates to:
 ```ts
 import { executeUpdate } from "@springbird/effect-temporal/engine-client";
 
-const previous = yield* executeUpdate(SetLanguage, {
+const previous = yield* executeUpdate(SetLanguage.update, {
   client,
   workflowId,
   payload: { language: "french" },
@@ -69,6 +69,6 @@ A request that fails the payload schema is the caller's bug: it is **answered wi
 
 | | delivery | response | closed execution |
 | --- | --- | --- | --- |
-| `DurableDeferred` | one-shot signal | none (it *is* the workflow's input) | no-op |
-| `DurableMailbox` | repeated signals, ordered | none | no-op |
-| `DurableUpdate` | repeated updates, ordered | typed success/failure per request | defect (interruption if cancelled while pending) |
+| deferred (`defineDeferred`) | one-shot signal | none (it *is* the workflow's input) | no-op |
+| mailbox (`defineMailbox`) | repeated signals, ordered | none | no-op |
+| update (`defineUpdate`) | repeated updates, ordered | typed success/failure per request | defect (interruption if cancelled while pending) |

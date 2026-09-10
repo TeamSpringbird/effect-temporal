@@ -4,30 +4,28 @@
 // finished by a one-shot approval.
 
 import * as Schema from "effect/Schema";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as StateCell from "../../state-cell.js";
-import * as DurableUpdate from "../../update.js";
+import { defineDeferred, defineState, defineUpdate } from "../../definition.js";
 
 export const SUPPORTED_LANGUAGES = ["english", "french", "spanish"] as const;
 
-export const SetLanguage = DurableUpdate.make("set-language", {
+export const SetLanguage = defineUpdate("set-language", {
   payload: Schema.Struct({ language: Schema.String }),
   success: Schema.String,
   error: Schema.String,
 });
 
-export const CurrentLanguage = StateCell.make("current-language", {
+export const CurrentLanguage = defineState("current-language", {
   value: Schema.String,
 });
 
-export const Approved = DurableDeferred.make("message-approved", {
+export const Approved = defineDeferred("message-approved", {
   success: Schema.String,
 });
 
 /** An update the workflow NEVER takes — for the lifecycle-edge test where a
  * run completes with the request still pending. */
-export const Orphan = DurableUpdate.make("orphan", {
+export const Orphan = defineUpdate("orphan", {
   payload: Schema.Struct({ note: Schema.String }),
   success: Schema.String,
   error: Schema.String,

@@ -68,11 +68,11 @@ describe("continueAsNew over Temporal", { concurrent: false }, () => {
       const handle = client.workflow.getHandle(executionId);
 
       const readStage = () =>
-        Effect.runPromise(readStateCell(LoopStage, { client, workflowId: executionId }));
+        Effect.runPromise(readStateCell(LoopStage.cell, { client, workflowId: executionId }));
       const releaseGate = (word: string) =>
         run(
-          DurableDeferred.done(LoopGate, {
-            token: DurableDeferred.tokenFromExecutionId(LoopGate, {
+          DurableDeferred.done(LoopGate.deferred, {
+            token: DurableDeferred.tokenFromExecutionId(LoopGate.deferred, {
               workflow: CellLoopDemo,
               executionId,
             }),

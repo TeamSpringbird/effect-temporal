@@ -1,11 +1,51 @@
 # Testing your app
 
-Two testing stories ship in `@springbird/effect-temporal/testing`, for two kinds of test:
+Three testing stories ship in `@springbird/effect-temporal/testing`, for three kinds of test:
 
+- **No engine at all** — `makeTestWorkflowOps`, an in-memory `WorkflowOps` runtime: the same handler that runs on Temporal runs in a plain unit test, driven directly.
 - **Temporal as a seam** — a typed in-memory fake of the Temporal client, for fast service tests that assert *what was started, signalled, terminated*.
 - **Real workflow semantics** — a harness over Temporal's own test server (time-skipping timers, real retries, continue-as-new), for tests that run the actual workflow.
 
-Both need the optional peers `@temporalio/testing` and `@temporalio/worker` only for the harness path.
+The optional peers `@temporalio/testing` and `@temporalio/worker` are needed only for the harness path.
+
+## The in-memory runtime
+
+A handler authored against [declared capabilities](/guide/declaring-capabilities) requires exactly one service, `WorkflowOps`. `makeTestWorkflowOps` builds an in-memory implementation plus the client half of every declaration — a small world your test drives the way a real client would:
+
+```ts
+import { Effect, Fiber } from "effect";
+import { handle } from "@springbird/effect-temporal/activities";
+import { makeTestWorkflowOps } from "@springbird/effect-temporal/testing";
+import { Approval, Charge, orderHandler, Priority, SetAmount, Status } from "./definitions.js";
+
+const world = yield* makeTestWorkflowOps({
+  activities: [handle(Charge, () => Effect.succeed("receipt"))],
+});
+
+// The SAME handler that workflowBundle hosts on Temporal:
+const fiber = yield* Effect.forkChild(
+  orderHandler({ orderId: "o-1" }).pipe(Effect.provide(world.layer)),
+);
+
+const previous = yield* world.request(SetAmount, { amountCents: 2500 }); // update: typed response
+yield* world.offer(Priority, { level: 2 });                              // mailbox message
+yield* world.resolve(Approval, "ben");                                   // deferred completion
+const phase = yield* world.stateOf(Status);                              // Option of last .set
+
+const result = yield* Fiber.join(fiber);
+```
+
+The world's surface:
+
+- **`layer`** — provides `WorkflowOps` backed by this world; provide it to the handler.
+- **`resolve(deferred, value)`** — resolves a declared deferred, waking a handler blocked on `.await`.
+- **`offer(mailbox, payload)`** — delivers one mailbox message to `.take`/`.poll`.
+- **`request(update, payload)`** — sends an update request and awaits the typed response the handler's `respond` produces (typed failure in the error channel).
+- **`stateOf(cell)`** — reads the last value the handler `.set`, as an `Option`.
+
+Activity calls run their bound handlers with the payload round-tripped through the declaration's schema (as the wire would); typed failures land in the error channel, everything else is a defect. A call to an activity with no binding dies loudly. `version` always answers the newest name — there is no replay in memory.
+
+No sandbox, no server, no Temporal: this is the test for handler *logic* — branching, message ordering, typed refusals. Replay, durable timers, and retries stay with the harness below.
 
 ## The fake client
 
@@ -90,8 +130,9 @@ expect(fake.starts[0].args[0]).toEqual(encodeWorkflowPayload(OrderFlow, payload)
 
 | Test | Tool |
 | --- | --- |
+| "the handler's logic is right — branches, messages, typed refusals" | `makeTestWorkflowOps` |
 | "my service starts the right workflow with the right payload" | fake client |
 | "duplicate submits don't double-start" | fake client + `simulateAlreadyStarted` |
 | "the workflow's timer/retry/compensation logic is right" | live harness |
-| "mailboxes, updates, continue-as-new behave" | live harness |
+| "mailboxes, updates, continue-as-new behave under real Temporal" | live harness |
 | "schedules / Nexus wiring works" | live harness, `mode: "local"` |

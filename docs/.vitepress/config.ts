@@ -74,6 +74,7 @@ export default defineConfig({
         text: "Author",
         items: [
           { text: "Defining workflows", link: "/guide/defining-workflows" },
+          { text: "Declaring capabilities", link: "/guide/declaring-capabilities" },
           { text: "Activities", link: "/guide/activities" },
           { text: "Timers & approvals", link: "/guide/timers-and-approvals" },
           { text: "Child workflows", link: "/guide/child-workflows" },

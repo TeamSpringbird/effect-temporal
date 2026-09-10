@@ -42,8 +42,11 @@ const makeActivities = () => {
 };
 
 const approve = (executionId: string, approver: string) =>
-  DurableDeferred.done(Approval, {
-    token: DurableDeferred.tokenFromExecutionId(Approval, { workflow: Demo, executionId }),
+  DurableDeferred.done(Approval.deferred, {
+    token: DurableDeferred.tokenFromExecutionId(Approval.deferred, {
+      workflow: Demo,
+      executionId,
+    }),
     exit: Exit.succeed(approver),
   });
 
@@ -64,7 +67,7 @@ describe("core primitives over Temporal", { concurrent: false }, () => {
       expect(
         Option.isNone(
           await Effect.runPromise(
-            deferredState(Approval, { client: engineOptions.client, workflowId: executionId }),
+            deferredState(Approval.deferred, { client: engineOptions.client, workflowId: executionId }),
           ),
         ),
       ).toBe(true);
@@ -77,7 +80,7 @@ describe("core primitives over Temporal", { concurrent: false }, () => {
 
       // Resolved deferred now reads back its typed exit.
       const state = await Effect.runPromise(
-        deferredState(Approval, { client: engineOptions.client, workflowId: executionId }),
+        deferredState(Approval.deferred, { client: engineOptions.client, workflowId: executionId }),
       );
       expect(Option.isSome(state) && Exit.isSuccess(state.value) && state.value.value).toBe("uri");
 
@@ -263,7 +266,7 @@ describe("core primitives over Temporal", { concurrent: false }, () => {
       expect(
         Option.isNone(
           await Effect.runPromise(
-            deferredState(Approval, { client: engineOptions.client, workflowId: executionId }),
+            deferredState(Approval.deferred, { client: engineOptions.client, workflowId: executionId }),
           ),
         ),
       ).toBe(true);

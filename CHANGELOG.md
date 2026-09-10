@@ -9,7 +9,31 @@ interfaces from `effect/unstable/*`, whose API can move between releases. Each r
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
 
-## 0.2.0 (unreleased)
+## 0.3.0 (unreleased)
+
+- NEW: the `definition` module — declare each capability once and use it
+  directly inside handlers: `defineActivity` (callable: `yield* Charge({ orderId })`),
+  `defineDeferred` (`.await`), `defineMailbox` (`.take`/`.poll`),
+  `defineUpdate` (`.take`), `defineState` (`.set`), plus `version` (patch-marker
+  logic branches) and `evolved` (newest-first schema evolution with pure
+  migrations). Every primitive requires only the `WorkflowOps` service — the
+  one seam an engine implements — so handlers import nothing from
+  `engine-sandbox` and are engine-agnostic. Client-side driving uses the
+  declaration's underlying primitive (`U.update`, `M.mailbox`, `C.cell`,
+  `D.deferred`) with the existing `engine-client` ops.
+- NEW: `makeTestWorkflowOps` in `testing` — an in-memory `WorkflowOps`
+  runtime (activities run their `handle` bindings with schema-validated
+  payloads; deferreds/mailboxes/updates/state driven via
+  `resolve`/`offer`/`request`/`stateOf`), so the same handler that runs on
+  Temporal runs in a plain unit test with no engine and no test server.
+- `workflowBundle` provides the Temporal `WorkflowOps` runtime to hosted
+  layers automatically; bundle authoring is otherwise unchanged.
+- The repository's fixtures, examples, and docs author with the `definition`
+  module throughout. The low-level per-primitive calls (`callActivity`,
+  `takeMailbox`, `pollMailbox`, `takeUpdate`, `setStateCell`) remain
+  exported from `engine-sandbox` as the machinery underneath.
+
+## 0.2.0 (2026-08-27)
 
 - BREAKING: workflow bundles are authored with `Workflow.toLayer`, hosted behind `workflowBundle(layer)` — one
   dynamic default export per bundle, the same registration-driven authoring

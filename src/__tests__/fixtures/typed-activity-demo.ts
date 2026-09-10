@@ -1,12 +1,12 @@
 import * as Schema from "effect/Schema";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as TypedActivity from "../../typed-activity.js";
+import { defineActivity } from "../../definition.js";
 
 export const OutOfStock = Schema.TaggedStruct("OutOfStock", {
   sku: Schema.String,
 });
 
-export const Reserve = TypedActivity.make("typedReserve", {
+export const Reserve = defineActivity("typedReserve", {
   payload: { sku: Schema.String, quantity: Schema.Finite },
   success: Schema.String,
   error: OutOfStock,

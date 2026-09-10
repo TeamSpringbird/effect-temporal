@@ -7,10 +7,9 @@
 
 import * as Schema from "effect/Schema";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableMailbox from "../../mailbox.js";
-import * as StateCell from "../../state-cell.js";
+import { defineMailbox, defineState } from "../../definition.js";
 
-export const StateUpdates = DurableMailbox.make("state-updates", {
+export const StateUpdates = defineMailbox("state-updates", {
   payload: Schema.Union([
     Schema.Struct({
       op: Schema.Literal("set"),
@@ -24,7 +23,7 @@ export const StateUpdates = DurableMailbox.make("state-updates", {
 
 /** The `state` sample's query half: the current entries, published after
  * every update and readable mid-flight or after completion. */
-export const StateSnapshot = StateCell.make("state-snapshot", {
+export const StateSnapshot = defineState("state-snapshot", {
   value: Schema.Record(Schema.String, Schema.Finite),
 });
 
@@ -36,7 +35,7 @@ export const StateDemo = Workflow.make("effectStateDemo", {
   success: Schema.String,
 });
 
-export const DeadlineUpdates = DurableMailbox.make("deadline-updates", {
+export const DeadlineUpdates = defineMailbox("deadline-updates", {
   payload: Schema.Struct({ millis: Schema.Finite }),
 });
 

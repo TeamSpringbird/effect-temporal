@@ -25,9 +25,9 @@ Interrupting a closed or unknown execution is a no-op. For a hard stop that skip
 `Workflow.withCompensation` registers an undo step that runs if the workflow later fails or is cancelled — the saga pattern, in ordinary Effect:
 
 ```ts
-const reservation = yield* callActivity(Reserve, { sku }).pipe(
+const reservation = yield* Reserve({ sku }).pipe(
   Workflow.withCompensation((value) =>
-    callActivity(Release, { reservation: value }).pipe(Effect.asVoid),
+    Release({ reservation: value }).pipe(Effect.asVoid),
   ),
 );
 ```
@@ -39,7 +39,7 @@ On a typed failure or an interrupt downstream, `Release` runs during the unwind.
 Interruption inside the body composes the same way. When `Effect.timeout` fires or an `Effect.race` is lost, the interrupted fiber's in-flight call is **cancelled server-side** while the run itself continues:
 
 ```ts
-const fast = yield* callActivity(Slow, payload).pipe(Effect.timeoutOption("30 seconds"));
+const fast = yield* Slow(payload).pipe(Effect.timeoutOption("30 seconds"));
 // None on timeout — and the server-side activity received a cancel request,
 // visible as ActivityTaskCancelRequested in history.
 ```

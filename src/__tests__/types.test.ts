@@ -99,23 +99,23 @@ const _activities = () => {
 
 const _mailboxes = () => {
   const { client } = clientOptions;
-  const taken = takeMailbox(StateUpdates);
+  const taken = takeMailbox(StateUpdates.mailbox);
   expectTypeOf<Effect.Success<typeof taken>>().toEqualTypeOf<StateUpdate>();
   expectTypeOf<Effect.Services<typeof taken>>().toEqualTypeOf<SandboxRun>();
 
   return [
     taken,
-    offerMailbox(StateUpdates, { client, workflowId: "id", payload: { op: "finish" } }),
-    offerMailboxFromWorkflow(StateUpdates, { workflowId: "id", payload: { op: "finish" } }),
+    offerMailbox(StateUpdates.mailbox, { client, workflowId: "id", payload: { op: "finish" } }),
+    offerMailboxFromWorkflow(StateUpdates.mailbox, { workflowId: "id", payload: { op: "finish" } }),
     // @ts-expect-error unknown mailbox op
-    offerMailbox(StateUpdates, { client, workflowId: "id", payload: { op: "reset" } }),
+    offerMailbox(StateUpdates.mailbox, { client, workflowId: "id", payload: { op: "reset" } }),
     // @ts-expect-error a set requires key and value
-    offerMailboxFromWorkflow(StateUpdates, { workflowId: "id", payload: { op: "set" } }),
+    offerMailboxFromWorkflow(StateUpdates.mailbox, { workflowId: "id", payload: { op: "set" } }),
   ];
 };
 
 const _stateCells = () => {
-  const read = readStateCell(StateSnapshot, {
+  const read = readStateCell(StateSnapshot.cell, {
     client: clientOptions.client,
     workflowId: "id",
   });
@@ -125,15 +125,15 @@ const _stateCells = () => {
 
   return [
     read,
-    setStateCell(StateSnapshot, { a: 1 }),
+    setStateCell(StateSnapshot.cell, { a: 1 }),
     // @ts-expect-error cell values are numbers
-    setStateCell(StateSnapshot, { a: "one" }),
+    setStateCell(StateSnapshot.cell, { a: "one" }),
   ];
 };
 
 const _updates = () => {
   const { client } = clientOptions;
-  const response = executeUpdate(SetLanguage, {
+  const response = executeUpdate(SetLanguage.update, {
     client,
     workflowId: "id",
     payload: { language: "french" },
@@ -143,9 +143,9 @@ const _updates = () => {
 
   const negative =
     // @ts-expect-error payload must match the update's schema
-    executeUpdate(SetLanguage, { client, workflowId: "id", payload: { lang: "x" } });
+    executeUpdate(SetLanguage.update, { client, workflowId: "id", payload: { lang: "x" } });
 
-  const taken = takeUpdate(SetLanguage);
+  const taken = takeUpdate(SetLanguage.update);
   expectTypeOf<Effect.Services<typeof taken>>().toEqualTypeOf<SandboxRun>();
   const served = Effect.andThen(taken, (request) => {
     expectTypeOf(request.payload).toEqualTypeOf<{ readonly language: string }>();
@@ -174,7 +174,7 @@ const _continueAsNew = () => {
 };
 
 const _deferreds = () => {
-  const state = deferredState(Approved, { client: clientOptions.client, workflowId: "id" });
+  const state = deferredState(Approved.deferred, { client: clientOptions.client, workflowId: "id" });
   expectTypeOf<Effect.Success<typeof state>>().toEqualTypeOf<
     Option.Option<Exit.Exit<string, never>>
   >();

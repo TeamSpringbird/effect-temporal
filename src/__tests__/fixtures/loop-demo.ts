@@ -3,9 +3,8 @@
 // until the iteration cap.
 
 import * as Schema from "effect/Schema";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as StateCell from "../../state-cell.js";
+import { defineDeferred, defineState } from "../../definition.js";
 
 export const LoopDemo = Workflow.make("effectLoopDemo", {
   payload: { requestId: Schema.String, iteration: Schema.Finite },
@@ -16,13 +15,13 @@ export const LoopDemo = Workflow.make("effectLoopDemo", {
 /** Snapshot published by `CellLoopDemo` — cells are PER-RUN, so the value
  * run 1 publishes must read as `None` after continue-as-new until run 2
  * republishes. */
-export const LoopStage = StateCell.make("loop-stage", {
+export const LoopStage = defineState("loop-stage", {
   value: Schema.String,
 });
 
 /** Gate awaited once per run, so the test controls exactly when run 1
  * continues-as-new and when run 2 republishes and finishes. */
-export const LoopGate = DurableDeferred.make("loop-gate", {
+export const LoopGate = defineDeferred("loop-gate", {
   success: Schema.String,
 });
 

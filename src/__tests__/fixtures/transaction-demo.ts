@@ -4,9 +4,9 @@
 
 import * as Schema from "effect/Schema";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableUpdate from "../../update.js";
+import { defineUpdate } from "../../definition.js";
 
-export const GetConfirmation = DurableUpdate.make("get-confirmation", {
+export const GetConfirmation = defineUpdate("get-confirmation", {
   payload: Schema.Struct({}),
   success: Schema.String,
   error: Schema.Never,

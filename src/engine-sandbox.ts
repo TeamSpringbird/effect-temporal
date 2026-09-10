@@ -96,6 +96,13 @@ import {
   type MailboxSignalPayload,
 } from "./mailbox.js";
 import { STATE_CELL_QUERY, stateCellCodec, type StateCell } from "./state-cell.js";
+import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
+import {
+  WorkflowOps,
+  type UpdateRequest as DefUpdateRequest,
+  type WorkflowOpsRuntime,
+} from "./definition.js";
+import * as Versioning from "./versioning.js";
 import {
   updateCodec,
   WORKFLOW_UPDATE,
@@ -337,10 +344,11 @@ const updateBuffer = (run: RunState, name: string): PendingUpdate[] => {
  * @since 0.1.0
  * @category models
  */
-export interface UpdateRequest<S extends Schema.Top, E extends Schema.Top, P> {
-  readonly payload: P;
-  readonly respond: (exit: Exit.Exit<S["Type"], E["Type"]>) => Effect.Effect<void>;
-}
+export type UpdateRequest<S extends Schema.Top, E extends Schema.Top, P> = DefUpdateRequest<
+  P,
+  S["Type"],
+  E["Type"]
+>;
 
 /**
  * Durably await the next `executeUpdate` request for `update`, in delivery
@@ -1020,12 +1028,12 @@ const registrationSandboxRun = new Proxy({} as RunState, {
 
 /** layer → registry, memoized per V8 context (reuseV8Context-safe). */
 const workflowRegistries = new Map<
-  Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+  Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun | WorkflowOps>,
   Promise<Map<string, RegisteredWorkflow>>
 >();
 
 const buildRegistry = (
-  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun | WorkflowOps>,
 ): Effect.Effect<Map<string, RegisteredWorkflow>> =>
   Effect.gen(function* () {
     const registry = new Map<string, RegisteredWorkflow>();
@@ -1058,12 +1066,42 @@ const buildRegistry = (
         Layer.mergeAll(
           Layer.succeed(WorkflowEngine.WorkflowEngine, registrationEngine),
           Layer.succeed(SandboxRunTag, registrationSandboxRun),
+          Layer.succeed(WorkflowOps, temporalWorkflowOps),
         ),
       ),
       scope,
     );
     return registry;
   });
+
+/** Forget ONLY the requirements of a sandbox op; success and error survive. */
+const eraseR = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E> =>
+  effect as Effect.Effect<A, E>;
+
+/**
+ * The Temporal implementation of the declared-workflow ops seam: every
+ * operation dispatches into this module's machinery. Provided automatically
+ * to the layers `workflowBundle` hosts.
+ *
+ * Module-private on purpose: outside `workflowBundle`'s per-run wrapper the
+ * erased sandbox services are missing and every op would die at call time.
+ *
+ * @since 0.3.0
+ * @category workflow
+ */
+const temporalWorkflowOps: WorkflowOpsRuntime = {
+  // SAFETY: eraseR removes ONLY the R channel — each op requires SandboxRun
+  // (and the engine services) at the type level, and the per-run wrapper
+  // provides them, same discipline as SandboxHandler. Success and error
+  // shapes stay compile-checked against the seam.
+  activity: (activity, payload) => eraseR(callActivity(activity, payload)),
+  deferredAwait: (deferred) => eraseR(DurableDeferred.await(deferred)),
+  mailboxTake: (mailbox) => eraseR(takeMailbox(mailbox)),
+  mailboxPoll: (mailbox) => eraseR(pollMailbox(mailbox)),
+  updateTake: (update) => eraseR(takeUpdate(update)),
+  stateSet: (cell, value) => eraseR(setStateCell(cell, value)),
+  version: (site, names) => Versioning.version(site, names),
+};
 
 /**
  * Host `Workflow.toLayer` registrations behind one dynamic Temporal
@@ -1087,7 +1125,7 @@ const buildRegistry = (
  * @category constructors
  */
 export const workflowBundle = (
-  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun>,
+  workflows: Layer.Layer<never, never, WorkflowEngine.WorkflowEngine | SandboxRun | WorkflowOps>,
 ): ((wirePayload: unknown) => Promise<unknown>) => {
   return async function runDynamic(wirePayload: unknown): Promise<unknown> {
     ensureSandboxPolyfills();

@@ -6,9 +6,9 @@
 
 import * as Schema from "effect/Schema";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableMailbox from "../../mailbox.js";
+import { defineMailbox } from "../../definition.js";
 
-export const CompletionReports = DurableMailbox.make("record-complete", {
+export const CompletionReports = defineMailbox("record-complete", {
   payload: Schema.Struct({ index: Schema.Finite }),
 });
 

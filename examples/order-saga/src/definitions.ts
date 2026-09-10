@@ -5,19 +5,21 @@
 
 import { Schema } from "effect";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
-import * as StateCell from "@springbird/effect-temporal/state-cell";
-import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
+import {
+  defineActivity,
+  defineDeferred,
+  defineState,
+} from "@springbird/effect-temporal/definition";
 
 /** Reserving inventory — the compensated step. */
-export const Reserve = TypedActivity.make("reserve", {
+export const Reserve = defineActivity("reserve", {
   payload: { orderId: Schema.String },
   success: Schema.String, // the reservation id
   options: { startToCloseTimeout: "10 seconds", retry: { maximumAttempts: 3 } },
 });
 
 /** Releasing a reservation — the compensation for `Reserve`. */
-export const Release = TypedActivity.make("release", {
+export const Release = defineActivity("release", {
   payload: { reservation: Schema.String },
   options: { startToCloseTimeout: "10 seconds", retry: { maximumAttempts: 3 } },
 });
@@ -28,7 +30,7 @@ export const CardDeclined = Schema.TaggedStruct("CardDeclined", {
   orderId: Schema.String,
 });
 
-export const Charge = TypedActivity.make("charge", {
+export const Charge = defineActivity("charge", {
   payload: { orderId: Schema.String, card: Schema.String },
   success: Schema.String, // the receipt id
   error: CardDeclined,
@@ -36,12 +38,12 @@ export const Charge = TypedActivity.make("charge", {
 });
 
 /** The manager's one-shot approval, completed from outside the workflow. */
-export const ManagerApproval = DurableDeferred.make("manager-approval", {
+export const ManagerApproval = defineDeferred("manager-approval", {
   success: Schema.String, // who approved
 });
 
 /** Observable progress, readable mid-flight and after the run closes. */
-export const OrderStatus = StateCell.make("order-status", {
+export const OrderStatus = defineState("order-status", {
   value: Schema.Struct({ phase: Schema.String }),
 });
 
