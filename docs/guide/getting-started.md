@@ -9,12 +9,12 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
 `effect`, `@temporalio/client`, and `@temporalio/workflow` are peer dependencies (modern package managers install them for you). You will also want `@temporalio/worker` to run a worker and `@temporalio/testing` for the test harness — both optional peers, used only where you use them.
 
 ::: warning Effect version
-effect-temporal targets **Effect v4** and pins its `effect` peer **exactly** (currently `4.0.0-beta.101`): the engine implements interfaces from `effect/unstable/*`, whose API can move between releases. Match the pinned version; each release of this package states the one `effect` version it is built and tested against.
+effect-temporal targets **Effect v4** and pins its `effect` peer **exactly** (currently `4.0.0-rc.112`): the engine implements interfaces from `effect/unstable/*`, whose API can move between releases. Match the pinned version; each release of this package states the one `effect` version it is built and tested against.
 :::
 
 A Temporal deployment has three kinds of process, and this package has a module for each:
 
-- the **workflow bundle** — deterministic code Temporal replays; uses `@springbird/effect-temporal/engine-sandbox`
+- the **workflow bundle** — deterministic code Temporal replays; its entry file uses `@springbird/effect-temporal/bundle`, its handlers only `@springbird/effect-temporal/definition`
 - the **worker** — runs the bundle and your activities; registers via `@springbird/effect-temporal/activities`
 - **clients** — ordinary Node processes that start and observe workflows; use `@springbird/effect-temporal/client`
 
@@ -50,8 +50,8 @@ The body is an Effect that runs inside the Temporal workflow sandbox. Workflows 
 ```ts
 // workflows.ts — the workflow bundle (Temporal's workflowsPath points here)
 import { Effect } from "effect";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
+import { workflowBundle } from "@springbird/effect-temporal/bundle";
+import { sleep } from "@springbird/effect-temporal/definition";
 import { OrderFlow, Reserve } from "./definitions.js";
 
 const OrderFlowLive = OrderFlow.toLayer((payload) =>
@@ -60,7 +60,7 @@ const OrderFlowLive = OrderFlow.toLayer((payload) =>
     // decoded, typed failure lands in the error channel. Retries are
     // Temporal's, per the declaration's options.
     const reservation = yield* Reserve({ sku: payload.sku, quantity: 1 });
-    yield* DurableClock.sleep({ name: "cooling-off", duration: "1 minute" });
+    yield* sleep({ name: "cooling-off", duration: "1 minute" });
     return `reserved:${reservation}`;
   }),
 );

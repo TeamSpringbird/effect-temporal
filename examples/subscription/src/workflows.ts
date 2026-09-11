@@ -11,8 +11,8 @@
 import { Effect } from "effect";
 import * as Option from "effect/Option";
 import * as Exit from "effect/Exit";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { continueAsNew, workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
+import { workflowBundle } from "@springbird/effect-temporal/bundle";
+import { continueAsNew, sleep } from "@springbird/effect-temporal/definition";
 import {
   CancelRequests,
   ChargeCard,
@@ -39,10 +39,9 @@ const SubscriptionLive = Subscription.toLayer((payload) =>
     while (true) {
       const winner = yield* Effect.raceAll([
         // The next billing cycle — a durable timer (name unique per sleep).
-        DurableClock.sleep({
-          name: `cycle-${cyclesThisRun}`,
-          duration: "1 second",
-        }).pipe(Effect.map(() => ({ kind: "bill" as const }))),
+        sleep({ name: `cycle-${cyclesThisRun}`, duration: "1 second" }).pipe(
+          Effect.map(() => ({ kind: "bill" as const })),
+        ),
         // A plan change — answered with the PREVIOUS plan, typed both ways.
         SetPlan.take.pipe(Effect.map((request) => ({ kind: "plan" as const, request }))),
         // A cancellation — fire-and-forget from anywhere.

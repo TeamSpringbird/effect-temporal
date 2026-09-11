@@ -9,12 +9,16 @@ import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import {
+  continueAsNew,
   defineActivity,
   defineDeferred,
   defineMailbox,
   defineState,
   defineUpdate,
+  executeChild,
+  sleep,
   version,
+  versioned,
 } from "../../definition.js";
 
 export const CardDeclined = Schema.TaggedStruct("CardDeclined", {
@@ -103,3 +107,81 @@ export const chargeImpl = ({
   amountCents >= 10_000
     ? Effect.fail({ _tag: "CardDeclined", orderId } as const)
     : Effect.succeed(`receipt-${orderId}-${amountCents}`);
+
+// ── 0.4.0: timers, continue-as-new, children, run-table versioning ──────────
+// Everything below is NEW in 0.4.0 and lives beside `OrderFlow`, whose
+// handler is byte-for-byte the 0.3.0 one: the recorded 0.3.0 history in
+// `histories/` must keep replaying through this bundle.
+
+/** Grace period: a cancellation racing a durable timer — the pattern most
+ * real workflows have, and the one the in-memory runtime could not run
+ * before 0.4.0 (timers were not on the seam). */
+export const CancelOrder = defineMailbox("defGrace/cancel", {
+  payload: Schema.Struct({ reason: Schema.String }),
+});
+
+export const GraceFlow = Workflow.make("defGrace", {
+  payload: { orderId: Schema.String },
+  idempotencyKey: ({ orderId }) => orderId,
+  success: Schema.String,
+});
+
+export const graceHandler = (_payload: { readonly orderId: string }) =>
+  Effect.gen(function* () {
+    const winner = yield* Effect.raceFirst(
+      CancelOrder.take.pipe(Effect.map((m) => ({ kind: "cancelled" as const, reason: m.reason }))),
+      sleep({ name: "grace", duration: "1 hour" }).pipe(
+        Effect.map(() => ({ kind: "elapsed" as const })),
+      ),
+    );
+    return winner.kind === "cancelled" ? `cancelled:${winner.reason}` : "shipped";
+  });
+
+/** Continue-as-new: a counter that rolls its history every run. */
+export const Tally = Workflow.make("defTally", {
+  payload: { batchId: Schema.String, count: Schema.Finite },
+  idempotencyKey: ({ batchId }) => batchId,
+  success: Schema.String,
+});
+
+export const tallyHandler = (payload: { readonly batchId: string; readonly count: number }) =>
+  Effect.gen(function* () {
+    if (payload.count >= 2) return `tallied:${payload.count}`;
+    return yield* continueAsNew(Tally, { batchId: payload.batchId, count: payload.count + 1 });
+  });
+
+/** A child with a typed failure, and a parent that starts it awaited or
+ * discarded — both authored against `WorkflowOps` alone. */
+export const Fulfil = Workflow.make("defFulfil", {
+  payload: { orderId: Schema.String },
+  idempotencyKey: ({ orderId }) => orderId,
+  success: Schema.String,
+  error: Schema.String,
+});
+
+export const fulfilHandler = (payload: { readonly orderId: string }) =>
+  payload.orderId.endsWith("-bad")
+    ? Effect.fail(`unfulfillable:${payload.orderId}`)
+    : Effect.map(Reserve({ orderId: payload.orderId }), (r) => `fulfilled:${r}`);
+
+export const Dispatch = Workflow.make("defDispatch", {
+  payload: { orderId: Schema.String, discard: Schema.Boolean },
+  idempotencyKey: ({ orderId }) => orderId,
+  success: Schema.String,
+  error: Schema.String,
+});
+
+export const dispatchHandler = (payload: { readonly orderId: string; readonly discard: boolean }) =>
+  Effect.gen(function* () {
+    // The run-table form of `version`: key order is the chain order.
+    const mode = yield* versioned("defDispatch/mode", {
+      direct: Effect.succeed("direct"),
+      routed: Effect.succeed("routed"),
+    });
+    if (payload.discard) {
+      const childId = yield* executeChild(Fulfil, { orderId: payload.orderId }, { discard: true });
+      return `${mode}|started:${childId}`;
+    }
+    const fulfilled = yield* executeChild(Fulfil, { orderId: payload.orderId });
+    return `${mode}|${fulfilled}`;
+  });

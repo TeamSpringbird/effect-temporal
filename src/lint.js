@@ -8,9 +8,63 @@
 //     "rules": { "effect-temporal/zero-arity-effect-promise": "error", ... } }
 
 const isSandboxSource = (source) =>
-  source === "@temporalio/workflow" || source.endsWith("/engine-sandbox");
+  source === "@temporalio/workflow" ||
+  source.endsWith("/engine-sandbox") ||
+  source.endsWith("/engine-sandbox.js") ||
+  source.endsWith("/bundle") ||
+  source.endsWith("/bundle.js");
 const isClientSource = (source) =>
-  source === "@temporalio/client" || source.endsWith("/engine-client");
+  source === "@temporalio/client" ||
+  source.endsWith("/engine-client") ||
+  source.endsWith("/engine-client.js");
+
+/** Which package module an import source names, ignoring the `.js` suffix
+ * and whether it is the published specifier or a relative path. */
+const moduleOf = (source) => {
+  if (typeof source !== "string") return undefined;
+  // Only THIS package's modules — by published specifier or relative path —
+  // so an unrelated `some-lib/update` is never mistaken for ours.
+  const match =
+    /(?:^|\/)(?:effect-temporal|\.|\.\.)\/(engine-sandbox|typed-activity|versioning|mailbox|update|state-cell|definition)(?:\.js)?$/.exec(
+      source,
+    );
+  return match?.[1];
+};
+
+/** The deprecated authoring surface (removed in 0.5.0) and what replaces
+ * each symbol. `*` covers the module's namespace import and any named
+ * import not listed individually. */
+const DEPRECATED = {
+  "engine-sandbox": {
+    callActivity: "call the declared activity directly (`yield* Charge(payload)`, from `defineActivity` in `definition`)",
+    takeMailbox: "the declaration's `.take` (`defineMailbox` in `definition`)",
+    pollMailbox: "the declaration's `.poll` (`defineMailbox` in `definition`)",
+    takeUpdate: "the declaration's `.take` (`defineUpdate` in `definition`)",
+    setStateCell: "the declaration's `.set` (`defineState` in `definition`)",
+    sleepUntil: "`sleepUntil` from `definition`",
+    continueAsNew: "`continueAsNew` from `definition`",
+    UpdateRequest: "`UpdateRequest<Payload, Success, Error>` from `definition`",
+  },
+  "typed-activity": {
+    make: "`defineActivity` from `definition`",
+    codecsFor: "`codecsFor` from `wire`",
+    ACTIVITY_EXIT_TYPE: "`ACTIVITY_EXIT_TYPE` from `wire`",
+    TypedActivityCodecs: "`TypedActivityCodecs` from `wire`",
+    "*": "the same name from `definition` (`defineActivity`, `PayloadOf`, `SuccessOf`, `ErrorOf`, `AnyTypedActivity`, ...)",
+  },
+  versioning: {
+    match: "`versioned(site, { v1: run1, v2: run2 })` from `definition`",
+    version: "`version(site, names)` from `definition`",
+    "*": "`version` / `versioned` from `definition`",
+  },
+  mailbox: {
+    make: "`defineMailbox` from `definition`",
+    MAILBOX_SIGNAL: "the fake client's `offer` / `offersTo` (testing) — no wire constant needed",
+    "*": "`defineMailbox` from `definition`",
+  },
+  update: { make: "`defineUpdate` from `definition`" },
+  "state-cell": { make: "`defineState` from `definition`" },
+};
 
 const isEffectCall = (node, names) =>
   node.callee.type === "MemberExpression" &&
@@ -176,20 +230,22 @@ const rules = {
     ...sandboxRule((_context, state) => {
       const FORKING = ["forkChild", "forkDetach", "raceFirst", "race", "raceAll", "all"];
       let forkDepth = 0;
-      let definedVersionLocal = null;
+      // Local names of the definition module's `version` / `versioned`
+      // (alias-aware); the bare names when not imported explicitly.
+      const definedVersionLocals = new Set();
       return {
         // Definition-authored handler modules import no engine module on
-        // purpose — importing `version` from the definition module is what
-        // marks the file as workflow code for THIS rule (alias-aware).
+        // purpose — importing `version` or `versioned` from the definition
+        // module is what marks the file as workflow code for THIS rule.
         ImportDeclaration(node) {
-          const source = node.source.value;
-          if (
-            typeof source === "string" &&
-            (source.endsWith("/definition") || source.endsWith("/definition.js"))
-          ) {
+          if (moduleOf(node.source.value) === "definition") {
             for (const specifier of node.specifiers ?? []) {
-              if (specifier.type === "ImportSpecifier" && specifier.imported?.name === "version") {
-                definedVersionLocal = specifier.local.name;
+              if (
+                specifier.type === "ImportSpecifier" &&
+                (specifier.imported?.name === "version" ||
+                  specifier.imported?.name === "versioned")
+              ) {
+                definedVersionLocals.add(specifier.local.name);
                 state.sandbox = true;
               }
             }
@@ -204,10 +260,13 @@ const rules = {
             node.callee.type === "MemberExpression" &&
             node.callee.object.type === "Identifier" &&
             node.callee.object.name === "Versioning";
-          // The definition module's bare `version(site, names)` call.
+          // The definition module's bare `version(site, names)` /
+          // `versioned(site, cases)` calls.
           const isDefinedVersion =
             node.callee.type === "Identifier" &&
-            node.callee.name === (definedVersionLocal ?? "version");
+            (definedVersionLocals.size > 0
+              ? definedVersionLocals.has(node.callee.name)
+              : node.callee.name === "version" || node.callee.name === "versioned");
           if (forkDepth > 0 && (isVersioningMember || isDefinedVersion)) {
             state.reports.push({ node, messageId: "fiber" });
           }
@@ -218,9 +277,56 @@ const rules = {
       };
     }),
   },
+
+  "prefer-definition": {
+    meta: {
+      type: "problem",
+      docs: {
+        description:
+          "Report imports of the deprecated authoring surface (engine-sandbox per-primitive " +
+          "calls, typed-activity, versioning, the mailbox/update/state-cell constructors) — " +
+          "each has a `definition`, `bundle`, or `wire` replacement, and the deprecated " +
+          "symbols are removed in 0.5.0.",
+      },
+      messages: {
+        deprecated: "`{{name}}` from `{{module}}` is deprecated (removed in 0.5.0) — use {{replacement}}.",
+      },
+      schema: [],
+    },
+    create(context) {
+      return {
+        ImportDeclaration(node) {
+          const module = moduleOf(node.source.value);
+          const table = module === undefined ? undefined : DEPRECATED[module];
+          if (table === undefined) return;
+          for (const specifier of node.specifiers ?? []) {
+            if (specifier.type === "ImportNamespaceSpecifier") {
+              if (table["*"] !== undefined) {
+                context.report({
+                  node: specifier,
+                  messageId: "deprecated",
+                  data: { name: `* as ${specifier.local.name}`, module, replacement: table["*"] },
+                });
+              }
+              continue;
+            }
+            if (specifier.type !== "ImportSpecifier") continue;
+            const imported = specifier.imported?.name ?? specifier.imported?.value;
+            const replacement = table[imported] ?? table["*"];
+            if (replacement === undefined) continue;
+            context.report({
+              node: specifier,
+              messageId: "deprecated",
+              data: { name: imported, module, replacement },
+            });
+          }
+        },
+      };
+    },
+  },
 };
 
 export default {
-  meta: { name: "effect-temporal", version: "0.1.0" },
+  meta: { name: "effect-temporal", version: "0.4.0" },
   rules,
 };

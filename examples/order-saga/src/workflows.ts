@@ -2,12 +2,14 @@
 // is an Effect running deterministically inside the workflow sandbox; every
 // side effect goes through a typed activity. The workflow registers itself
 // with `Workflow.toLayer`, hosted by the bundle's default export — which
-// provides the `WorkflowOps` runtime the declarations require.
+// provides the `WorkflowOps` runtime the declarations require. Note the
+// imports: the handler needs only `definition`; the bundle entry needs only
+// `bundle`.
 
 import { Effect } from "effect";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import { workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
+import { workflowBundle } from "@springbird/effect-temporal/bundle";
+import { sleep } from "@springbird/effect-temporal/definition";
 import { Charge, ManagerApproval, OrderSaga, OrderStatus, Release, Reserve } from "./definitions.js";
 
 const OrderSagaLive = OrderSaga.toLayer((payload) =>
@@ -33,7 +35,7 @@ const OrderSagaLive = OrderSaga.toLayer((payload) =>
 
     // A durable timer: survives worker restarts; costs no worker resources.
     yield* OrderStatus.set({ phase: "cooling-off" });
-    yield* DurableClock.sleep({ name: "cooling-off", duration: "2 seconds" });
+    yield* sleep({ name: "cooling-off", duration: "2 seconds" });
 
     // Block durably until a human approves (a signal from outside).
     yield* OrderStatus.set({ phase: "awaiting-approval" });

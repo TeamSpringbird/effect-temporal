@@ -5,6 +5,7 @@
     "effect-temporal/no-module-level-mutable": "error",
     "effect-temporal/no-mixed-halves": "error",
     "effect-temporal/prefer-call-temporal-activity": "warn",
-    "effect-temporal/versioning-on-main-fiber": "error"
+    "effect-temporal/versioning-on-main-fiber": "error",
+    "effect-temporal/prefer-definition": "error"
   }
 }

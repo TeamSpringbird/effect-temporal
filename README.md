@@ -14,11 +14,10 @@ start with
 The same pages live in [docs/](docs/) (`pnpm docs:dev` to browse locally).
 
 ```ts
-import { Effect, Schema } from "effect";
+import { Effect, Exit, Schema } from "effect";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { defineActivity, defineDeferred } from "@springbird/effect-temporal/definition";
-import { workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
+import { defineActivity, defineDeferred, sleep } from "@springbird/effect-temporal/definition";
+import { workflowBundle } from "@springbird/effect-temporal/bundle";
 import { WorkflowClient } from "@springbird/effect-temporal/client";
 
 // Declare once — shared by the workflow bundle, the worker, and every client.
@@ -42,7 +41,7 @@ const ManagerApproval = defineDeferred("manager-approval", {
 const OrderFlowLive = OrderFlow.toLayer((payload) =>
   Effect.gen(function* () {
     const paid = yield* Charge({ orderId: payload.orderId });
-    yield* DurableClock.sleep({ name: "cooling-off", duration: "3 days" });
+    yield* sleep({ name: "cooling-off", duration: "3 days" });
     const approver = yield* ManagerApproval.await;
     return `${paid}:approved-by:${approver}`;
   }),
@@ -50,8 +49,10 @@ const OrderFlowLive = OrderFlow.toLayer((payload) =>
 export default workflowBundle(OrderFlowLive); // the bundle's dynamic default
 
 // Drive it from ordinary Node — typed success/error, idempotent by digest id.
+// Client-side ops take the declaration itself.
 const program = Effect.gen(function* () {
   const wf = yield* WorkflowClient;
+  yield* wf.completeDeferred(ManagerApproval, workflowId, Exit.succeed("ben"));
   return yield* wf.execute(OrderFlow, { orderId: "ord_123" });
 });
 ```
@@ -67,7 +68,9 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
   want a second durable-execution system (Effect's own `effect/unstable/cluster`
   engine persists to its own SQL tables).
 - **One package, tree-shakeable modules** — `@springbird/effect-temporal/definition`
-  (declare capabilities once, engine-agnostic), `/engine-sandbox` (workflow
+  (declare capabilities once, engine-agnostic — activities, messages, state,
+  timers, continue-as-new, children, versioning), `/bundle` (the one file the
+  worker points at), `/engine-sandbox` (engine-level
   bundle), `/engine-client` + `/client` (ordinary Node), `/activities`
   (worker), `/testing`, `/nexus`, `/lint`. Nexus, worker, and testing peers
   are optional.
@@ -146,7 +149,7 @@ shipped preset, which resolves the plugin through the package's own
 ## Versioning policy
 
 Pre-1.0: **minor bumps may break APIs**. The `effect` peer dependency is
-pinned **exactly** (currently `4.0.0-beta.101`) and on purpose — the engine
+pinned **exactly** (currently `4.0.0-rc.112`) and on purpose — the engine
 implements interfaces from `effect/unstable/*`, whose API can move between
 releases. Each release states the one `effect` version it is built and
 tested against; tracking a new `effect` release is a new release of this

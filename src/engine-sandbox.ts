@@ -1,8 +1,24 @@
 /**
- * Sandbox half: `workflowBundle(layer)` hosts plain
- * `Workflow.toLayer` registrations behind one dynamic Temporal workflow —
- * export it as the workflow bundle's DEFAULT export and every registered
- * tag becomes a startable Temporal workflow type.
+ * Sandbox half — engine machinery. Applications import `workflowBundle`
+ * from the `bundle` module (the one file the Temporal worker points at) and
+ * author handlers with the `definition` module; nothing else here is part of
+ * the declaration surface:
+ *
+ * - **Engine-level, kept:** `callRawActivity` (invoke a foreign Temporal
+ *   activity proxy cancellably), `offerMailbox` (workflow → workflow),
+ *   `callNexusWorkflowOperation`, `SandboxRun`. These have no
+ *   engine-agnostic counterpart and are for code that deliberately steps
+ *   below the declaration surface.
+ * - **Deprecated, removed in 0.5.0:** the per-primitive calls
+ *   (`callActivity`, `takeMailbox`, `pollMailbox`, `takeUpdate`,
+ *   `setStateCell`), `sleepUntil`, `continueAsNew`, and the `UpdateRequest`
+ *   alias — each has a `definition` replacement named in its JSDoc. They
+ *   remain the machinery the Temporal `WorkflowOps` runtime dispatches into.
+ *
+ * `workflowBundle(layer)` hosts plain `Workflow.toLayer` registrations
+ * behind one dynamic Temporal workflow — export it as the workflow bundle's
+ * DEFAULT export and every registered tag becomes a startable Temporal
+ * workflow type.
  *
  * The whole Effect program runs inside the workflow sandbox, on a
  * microtask-driven scheduler (the sandbox has no `setImmediate`, and Effect's
@@ -67,7 +83,9 @@ import {
   workflowInfo,
 } from "@temporalio/workflow";
 import {
+  ACTIVITY_EXIT_TYPE,
   asJsonCodec,
+  codecsFor,
   DEFERRED_DONE_SIGNAL,
   DEFERRED_STATE_QUERY,
   decodeDeferredExit,
@@ -82,14 +100,6 @@ import * as Clock from "effect/Clock";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import { ensureSandboxPolyfills } from "./sandbox-polyfills.js";
 import {
-  ACTIVITY_EXIT_TYPE,
-  codecsFor,
-  type AnyTypedActivity,
-  type ErrorOf,
-  type PayloadOf,
-  type SuccessOf,
-} from "./typed-activity.js";
-import {
   MAILBOX_SIGNAL,
   mailboxCodec,
   type DurableMailbox,
@@ -98,7 +108,14 @@ import {
 import { STATE_CELL_QUERY, stateCellCodec, type StateCell } from "./state-cell.js";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import {
+  sleepUntilTarget,
+  toMailbox,
   WorkflowOps,
+  type MailboxLike,
+  type AnyTypedActivity,
+  type ErrorOf,
+  type PayloadOf,
+  type SuccessOf,
   type UpdateRequest as DefUpdateRequest,
   type WorkflowOpsRuntime,
 } from "./definition.js";
@@ -195,6 +212,10 @@ const SandboxRunTag = Context.Service<SandboxRun, RunState>(
  * activity is not cancelled on interrupt — it runs to completion
  * server-side, abandoned by the closing run.
  *
+ * **Engine-level.** Kept (not deprecated): the escape hatch for activities
+ * you do not own the declaration of. Your own activities are
+ * `defineActivity` calls.
+ *
  * @since 0.1.0
  * @category workflow
  */
@@ -290,8 +311,11 @@ export const callActivity = <A extends AnyTypedActivity>(
 /**
  * Sleep durably until an absolute time, no-op when it is already past. The
  * target is read against the sandbox's deterministic clock, so the delay is
- * stable on replay.
+ * stable on replay. The timestamp rule is `sleepUntilTarget` (definition):
+ * zone-less date-time strings and unparseable timestamps die loudly.
  *
+ * @deprecated Use `sleepUntil` from `definition` — same timer, same rule,
+ * runs on any engine. Removed in 0.5.0.
  * @since 0.1.0
  * @category workflow
  */
@@ -305,22 +329,7 @@ export const sleepUntil = (options: {
 }) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    if (
-      typeof options.timestamp === "string" &&
-      options.timestamp.includes("T") &&
-      !/(?:Z|[+-]\d{2}:?\d{2})$/.test(options.timestamp)
-    ) {
-      return yield* Effect.die(
-        `sleepUntil "${options.name}": date-time string "${options.timestamp}" has no timezone — zone-less strings parse in the worker's LOCAL timezone, which differs across workers and replays. Add "Z" or an explicit offset, or pass epoch millis.`,
-      );
-    }
-    const target =
-      typeof options.timestamp === "number" ? options.timestamp : Date.parse(options.timestamp);
-    if (Number.isNaN(target)) {
-      return yield* Effect.die(
-        `sleepUntil "${options.name}": unparseable timestamp "${String(options.timestamp)}"`,
-      );
-    }
+    const target = yield* sleepUntilTarget(options);
     const delay = target - now;
     if (delay > 0) {
       yield* DurableClock.sleep({ name: options.name, duration: Duration.millis(delay) });
@@ -337,10 +346,12 @@ const updateBuffer = (run: RunState, name: string): PendingUpdate[] => {
 };
 
 /**
- * A taken update request: the decoded payload and the one-shot typed
- * response channel the caller is blocked on. Respond before the run ends —
- * an unanswered update fails when the workflow completes.
+ * A taken update request — the LEGACY spelling with type parameters in
+ * `<SuccessSchema, ErrorSchema, Payload>` order.
  *
+ * @deprecated Use `UpdateRequest<Payload, Success, Error>` from
+ * `definition` (Type-level parameters, in declaration order). Removed in
+ * 0.5.0.
  * @since 0.1.0
  * @category models
  */
@@ -354,6 +365,8 @@ export type UpdateRequest<S extends Schema.Top, E extends Schema.Top, P> = DefUp
  * Durably await the next `executeUpdate` request for `update`, in delivery
  * order. The claim is synchronous on the taking fiber, like `takeMailbox`.
  *
+ * @deprecated Use the declaration's `SetAmount.take` (`defineUpdate` from
+ * `definition`). Removed in 0.5.0.
  * @since 0.1.0
  * @category workflow
  */
@@ -413,6 +426,8 @@ const mailboxBuffer = (run: RunState, name: string): unknown[] => {
  * The claim happens synchronously on the taking fiber after the wait, so an
  * interrupted take never steals a message from a later one.
  *
+ * @deprecated Use the declaration's `Priority.take` (`defineMailbox` from
+ * `definition`). Removed in 0.5.0.
  * @since 0.1.0
  * @category workflow
  */
@@ -451,6 +466,8 @@ export const takeMailbox = <S extends Schema.Top>(
  * canonical use is draining reports into carried state before
  * `continueAsNew`, since buffered messages do not survive the run change.
  *
+ * @deprecated Use the declaration's `Priority.poll` (`defineMailbox` from
+ * `definition`). Removed in 0.5.0.
  * @since 0.1.0
  * @category workflow
  */
@@ -479,14 +496,19 @@ export const pollMailbox = <S extends Schema.Top>(
  * Offer a message to ANOTHER workflow's mailbox (workflow → workflow).
  * Offering to a closed or unknown execution is a no-op — the receiver
  * finishing first is a normal race, matching `DurableDeferred.done`.
+ * Accepts the declaration (`Reports`) or its underlying primitive.
+ *
+ * **Engine-level.** Kept (not deprecated): it has no engine-agnostic
+ * counterpart yet, and is Temporal-only by nature.
  *
  * @since 0.1.0
  * @category workflow
  */
 export const offerMailbox = <S extends Schema.Top>(
-  mailbox: DurableMailbox<S>,
+  mailboxLike: MailboxLike<S>,
   options: { readonly workflowId: string; readonly payload: S["Type"] },
 ): Effect.Effect<void> => {
+  const mailbox = toMailbox(mailboxLike);
   const wire = mailboxCodec(mailbox).encode(options.payload);
   return Effect.promise(async () => {
     try {
@@ -509,6 +531,8 @@ export const offerMailbox = <S extends Schema.Top>(
  * outside via `readStateCell` (engine-client), including after the run
  * closes.
  *
+ * @deprecated Use the declaration's `Status.set(value)` (`defineState` from
+ * `definition`). Removed in 0.5.0.
  * @since 0.1.0
  * @category workflow
  */
@@ -532,6 +556,8 @@ export const setStateCell = <S extends Schema.Top>(
  * messages buffered but not yet taken do not carry into the new run — drain
  * before continuing.
  *
+ * @deprecated Use `continueAsNew` from `definition` — same semantics on
+ * Temporal, observable in the in-memory runtime. Removed in 0.5.0.
  * @since 0.1.0
  * @category workflow
  */
@@ -543,6 +569,15 @@ export const continueAsNew = <
 >(
   workflow: Workflow.Workflow<Tag, Payload, Success, Error>,
   payload: Payload["Type"],
+  options?: { readonly memo?: Record<string, unknown> },
+): Effect.Effect<never> => continueAsNewDecoded(workflow, payload, options);
+
+/** The engine-level continue-as-new: encode the DECODED payload through the
+ * workflow's own codec (a schema-invalid payload dies here, as it would for
+ * a client start) and hand the wire to Temporal. */
+const continueAsNewDecoded = (
+  workflow: Workflow.Any,
+  payload: unknown,
   options?: { readonly memo?: Record<string, unknown> },
 ): Effect.Effect<never> => {
   const wire = wireCodecsFor(workflow).encodePayload(payload);
@@ -580,6 +615,9 @@ export interface NexusOperationClient {
  *
  * Operations NOT backed by a shim workflow are plain workflow-API promises:
  * call them with `callRawActivity` directly.
+ *
+ * **Engine-level.** Kept (not deprecated): Nexus has no engine-agnostic
+ * counterpart yet.
  *
  * @since 0.1.0
  * @category workflow
@@ -1101,6 +1139,15 @@ const temporalWorkflowOps: WorkflowOpsRuntime = {
   updateTake: (update) => eraseR(takeUpdate(update)),
   stateSet: (cell, value) => eraseR(setStateCell(cell, value)),
   version: (site, names) => Versioning.version(site, names),
+  sleep: (options) => eraseR(DurableClock.sleep(options)),
+  sleepUntil: (options) => eraseR(sleepUntil(options)),
+  continueAsNew: (workflow, payload, options) => continueAsNewDecoded(workflow, payload, options),
+  // The child path IS upstream `execute` under the sandbox engine —
+  // `startChild` with the digest execution id, REQUEST_CANCEL/ABANDON by
+  // `discard`, attach-on-taken — so the recorded commands are identical to
+  // a handler calling `Child.execute(payload)` directly.
+  executeChild: (workflow, payload, { discard }) =>
+    eraseR((workflow as Workflow.AnyWithProps).execute(payload, { discard })),
 };
 
 /**

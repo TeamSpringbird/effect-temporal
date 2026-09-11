@@ -30,11 +30,10 @@ features:
 ## The whole idea, in one file
 
 ```ts
-import { Effect, Schema } from "effect";
+import { Effect, Exit, Schema } from "effect";
 import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { defineActivity, defineDeferred } from "@springbird/effect-temporal/definition";
-import { workflowBundle } from "@springbird/effect-temporal/engine-sandbox";
+import { defineActivity, defineDeferred, sleep } from "@springbird/effect-temporal/definition";
+import { workflowBundle } from "@springbird/effect-temporal/bundle";
 import { WorkflowClient } from "@springbird/effect-temporal/client";
 
 // 1. Declare once: shared by the workflow bundle, the worker, and every client.
@@ -57,15 +56,17 @@ const ManagerApproval = defineDeferred("manager-approval", {
 const OrderFlowLive = OrderFlow.toLayer((payload) =>
   Effect.gen(function* () {
     const paid = yield* Charge({ orderId: payload.orderId });
-    yield* DurableClock.sleep({ name: "cooling-off", duration: "3 days" });
+    yield* sleep({ name: "cooling-off", duration: "3 days" });
     const approver = yield* ManagerApproval.await;
     return `${paid}:approved-by:${approver}`;
   }),
 );
 export default workflowBundle(OrderFlowLive);
 
-// 3. Drive it from ordinary Node — typed success, typed failure, idempotent.
+// 3. Drive it from ordinary Node — typed success, typed failure, idempotent;
+//    client-side ops take the declaration itself.
 const wf = yield* WorkflowClient;
+yield* wf.completeDeferred(ManagerApproval, workflowId, Exit.succeed("ben"));
 const result = yield* wf.execute(OrderFlow, { orderId: "ord_123" });
 ```
 

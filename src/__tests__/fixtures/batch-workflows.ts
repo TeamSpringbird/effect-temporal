@@ -9,12 +9,8 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
-import {
-  callRawActivity,
-  continueAsNew,
-  workflowBundle,
-  offerMailbox,
-} from "../../engine-sandbox.js";
+import { callRawActivity, continueAsNew, offerMailbox } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import { BatchDemo, CompletionReports, RecordDemo } from "./batch-demo.js";
 
 const acts = proxyActivities<{ processRecord(index: string): Promise<string> }>({

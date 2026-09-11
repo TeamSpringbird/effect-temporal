@@ -5,12 +5,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import { createNexusServiceClient } from "@temporalio/workflow";
-import {
-  callNexusWorkflowOperation,
-  callRawActivity,
-  workflowBundle,
-  type NexusOperationClient,
-} from "../../engine-sandbox.js";
+import { callNexusWorkflowOperation, callRawActivity, type NexusOperationClient } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import { CallerDemo, GreetDemo, helloService } from "./nexus-demo.js";
 
 const GreetDemoLive = GreetDemo.toLayer((payload) =>

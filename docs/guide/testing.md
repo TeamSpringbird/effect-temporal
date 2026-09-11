@@ -15,11 +15,12 @@ A handler authored against [declared capabilities](/guide/declaring-capabilities
 ```ts
 import { Effect, Fiber } from "effect";
 import { handle } from "@springbird/effect-temporal/activities";
-import { makeTestWorkflowOps } from "@springbird/effect-temporal/testing";
+import { handleWorkflow, makeTestWorkflowOps } from "@springbird/effect-temporal/testing";
 import { Approval, Charge, orderHandler, Priority, SetAmount, Status } from "./definitions.js";
 
 const world = yield* makeTestWorkflowOps({
   activities: [handle(Charge, () => Effect.succeed("receipt"))],
+  workflows: [handleWorkflow(Fulfil, fulfilHandler)], // children executeChild can run
 });
 
 // The SAME handler that workflowBundle hosts on Temporal:
@@ -42,10 +43,38 @@ The world's surface:
 - **`offer(mailbox, payload)`** — delivers one mailbox message to `.take`/`.poll`.
 - **`request(update, payload)`** — sends an update request and awaits the typed response the handler's `respond` produces (typed failure in the error channel).
 - **`stateOf(cell)`** — reads the last value the handler `.set`, as an `Option`.
+- **`continuedAsNew`** / **`continuedAsNewOf(workflow)`** — `Some` once the handler called `continueAsNew`, carrying the payload the next run would decode (typed against `workflow` in the second form).
 
-Activity calls run their bound handlers with the payload round-tripped through the declaration's schema (as the wire would); typed failures land in the error channel, everything else is a defect. A call to an activity with no binding dies loudly. `version` always answers the newest name — there is no replay in memory.
+Activity calls run their bound handlers with the payload round-tripped through the declaration's schema (as the wire would); typed failures land in the error channel, everything else is a defect. A call to an activity with no binding dies loudly. `version` / `versioned` always answer the newest name — there is no replay in memory.
 
-No sandbox, no server, no Temporal: this is the test for handler *logic* — branching, message ordering, typed refusals. Replay, durable timers, and retries stay with the harness below.
+### Timers under `TestClock`
+
+`sleep` and `sleepUntil` follow Effect's `Clock`, so provide `TestClock.layer()` and `adjust` past them. They are deliberately **not instant**: the grace-period pattern — a mailbox take racing a timer — is testable in *both* orders:
+
+```ts
+import { TestClock } from "effect/testing";
+
+const program = Effect.gen(function* () {
+  const world = yield* makeTestWorkflowOps();
+
+  // Order 1: the cancellation lands first.
+  const a = yield* Effect.forkChild(graceHandler(payload).pipe(Effect.provide(world.layer)));
+  yield* world.offer(CancelOrder, { reason: "changed-mind" });
+  expect(yield* Fiber.join(a)).toBe("cancelled:changed-mind");
+
+  // Order 2: nothing arrives; the timer fires when the clock passes it.
+  const b = yield* Effect.forkChild(graceHandler(payload).pipe(Effect.provide(world.layer)));
+  yield* TestClock.adjust("1 hour");
+  expect(yield* Fiber.join(b)).toBe("shipped");
+});
+await Effect.runPromise(Effect.provide(program, TestClock.layer()));
+```
+
+### Continue-as-new and children
+
+`continueAsNew` interrupts the handler fiber (an interrupted exit) and records the continuation — read it with `world.continuedAsNewOf(Workflow)`; the payload was round-tripped through the workflow's payload schema, so a schema-invalid payload dies here as it would on Temporal. `executeChild` runs the child's `handleWorkflow` binding in-process with the same world: payload, success, and typed failure cross the child's schemas, a discarded child forks and returns its execution id, and a second start on a taken id attaches — the idempotency contract, in memory.
+
+No sandbox, no server, no Temporal: this is the test for handler *logic* — branching, message ordering, typed refusals, timer races, child composition. Replay and real retries stay with the harness below.
 
 ## The fake client
 
@@ -84,6 +113,13 @@ const fake = makeFakeTemporalClient({
 
 The fake covers `workflow.start`, `getHandle(...).result/signal/terminate`, and `withDeadline`. Anything else a test touches fails with a named error telling you what to configure.
 
+Mailbox offers are typed on both sides, so a service test never names a signal constant:
+
+```ts
+await Effect.runPromise(fake.offer(Priority, workflowId, { level: 3 })); // through the fake, as a client would
+expect(fake.offersTo(Priority)).toEqual([{ workflowId, payload: { level: 3 } }]); // decoded via the declaration
+```
+
 ## The live harness
 
 `startWorkflowTestHarness` boots a Temporal test server and hands back a typed harness. Framework-agnostic on purpose — wire it into your runner's lifecycle yourself:
@@ -108,6 +144,8 @@ it("reserves and completes", async () => {
 });
 ```
 
+The harness client drives declarations directly, mirroring the in-memory world's names: `wf.offer(Priority, id, payload)`, `wf.request(SetAmount, id, payload)`, `wf.stateOf(Status, id)`, `wf.resolve(Approval, id, value)`.
+
 - **Time skipping**: durable timers — a 3-day cooling-off, a 61-second not-before — resolve instantly while a result is being awaited. `harness.currentTimeMillis()` gives you the environment's current time for building absolute timestamps.
 - **`mode: "local"`** runs a full dev server instead — needed for Nexus and schedules, which the time-skipping server does not support.
 - `harness.env` exposes the underlying `TestWorkflowEnvironment` for surfaces the harness does not model.
@@ -130,7 +168,7 @@ expect(fake.starts[0].args[0]).toEqual(encodeWorkflowPayload(OrderFlow, payload)
 
 | Test | Tool |
 | --- | --- |
-| "the handler's logic is right — branches, messages, typed refusals" | `makeTestWorkflowOps` |
+| "the handler's logic is right — branches, messages, typed refusals, timer races, children" | `makeTestWorkflowOps` |
 | "my service starts the right workflow with the right payload" | fake client |
 | "duplicate submits don't double-start" | fake client + `simulateAlreadyStarted` |
 | "the workflow's timer/retry/compensation logic is right" | live harness |

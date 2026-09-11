@@ -3,7 +3,7 @@
 Temporal caps a run's history; a workflow that loops forever — an entity, a poller, a batch cursor — must periodically **continue as new**: end the current run and atomically start a fresh one with the same workflow id and a reset history.
 
 ```ts
-import { continueAsNew } from "@springbird/effect-temporal/engine-sandbox";
+import { continueAsNew } from "@springbird/effect-temporal/definition";
 
 const LoopDemoLive = LoopDemo.toLayer((payload) =>
   Effect.gen(function* () {
@@ -18,7 +18,7 @@ const LoopDemoLive = LoopDemo.toLayer((payload) =>
 );
 ```
 
-`continueAsNew(workflow, payload)` has type `Effect<never>` — nothing runs after it. The next run receives the payload you pass, so all carried state must be encodable through the payload schema.
+`continueAsNew(workflow, payload)` has type `Effect<never, never, WorkflowOps>` — nothing runs after it. The next run receives the payload you pass, so all carried state must be encodable through the payload schema; a payload that fails it dies **before** the run ends, on every engine.
 
 ## It unwinds as a throw
 
@@ -54,3 +54,16 @@ Pass a Temporal memo for the next run when you use memos for ops tooling:
 ```ts
 yield* continueAsNew(LoopDemo, nextPayload, { memo: { cursor: "2026-08-01" } });
 ```
+
+## In tests
+
+In the [in-memory runtime](/guide/testing#the-in-memory-runtime) `continueAsNew` interrupts the handler fiber and records the continuation; the test reads it back typed:
+
+```ts
+const exit = yield* Effect.exit(loopHandler({ requestId: "r", iteration: 0 }).pipe(Effect.provide(world.layer)));
+// exit is an interruption
+const next = yield* world.continuedAsNewOf(LoopDemo);
+// Option.some({ requestId: "r", iteration: 1 })
+```
+
+On the live harness a `wf.execute` follows the continue-as-new chain to the final run's result, as a real client does.

@@ -7,7 +7,8 @@ import { ApplicationFailure, WorkflowFailedError } from "@temporalio/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handle, implementActivities, type ActivityRunner } from "../activities.js";
 import { startWorkflowTestHarness, type WorkflowTestHarness } from "../testing.js";
-import { codecsFor, type ErrorOf, type PayloadOf, type SuccessOf } from "../typed-activity.js";
+import { type ErrorOf, type PayloadOf, type SuccessOf } from "../definition.js";
+import { codecsFor } from "../wire.js";
 import { Reserve, TypedActivityDemo } from "./fixtures/typed-activity-demo.js";
 
 let harness: WorkflowTestHarness;

@@ -40,11 +40,11 @@ Rules of the road:
 
 ## Calling (client side)
 
-Callers address the declaration's underlying primitive, `SetLanguage.update`:
+Callers address the declaration itself (the underlying primitive, `SetLanguage.update`, is accepted too):
 
 ```ts
 const wf = yield* WorkflowClient;
-const previous = yield* wf.executeUpdate(SetLanguage.update, workflowId, { language: "french" });
+const previous = yield* wf.executeUpdate(SetLanguage, workflowId, { language: "french" });
 // success channel: string (previous language)
 // error channel: string (typed failure from respond)
 ```
@@ -54,7 +54,7 @@ Without the service — the standalone form `WorkflowClient` delegates to:
 ```ts
 import { executeUpdate } from "@springbird/effect-temporal/engine-client";
 
-const previous = yield* executeUpdate(SetLanguage.update, {
+const previous = yield* executeUpdate(SetLanguage, {
   client,
   workflowId,
   payload: { language: "french" },

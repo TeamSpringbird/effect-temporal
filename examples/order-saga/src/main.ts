@@ -15,7 +15,6 @@
 // `new Client(...)` and a `Worker.create` against that connection.
 
 import { Effect, Exit, Layer, Option, Result } from "effect";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import type * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
 import type { Client } from "@temporalio/client";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
@@ -88,7 +87,7 @@ const worker = await Worker.create({
 });
 
 // Both layers: WorkflowClient for app-style calls, and the raw engine so
-// Effect's own APIs (DurableDeferred.done, OrderSaga.poll) work too.
+// Effect's own APIs (OrderSaga.poll, OrderSaga.executionId) work too.
 const layers = Layer.mergeAll(
   layerWorkflowClient({ client, taskQueue: "order-saga-demo" }),
   layerTemporalClientEngine({ client, taskQueue: "order-saga-demo" }),
@@ -111,17 +110,12 @@ await worker.runUntil(async () => {
       // Observe progress mid-flight through the state cell (a query — it
       // never perturbs the run).
       yield* Effect.sleep("1 second");
-      const status = yield* wf.readStateCell(OrderStatus.cell, workflowId);
+      const status = yield* wf.readStateCell(OrderStatus, workflowId);
       console.log("  status mid-flight:", Option.getOrElse(status, () => ({ phase: "?" })));
 
-      // The manager approves — a signal from entirely outside the workflow.
-      yield* DurableDeferred.done(ManagerApproval.deferred, {
-        token: DurableDeferred.tokenFromExecutionId(ManagerApproval.deferred, {
-          workflow: OrderSaga,
-          executionId: workflowId,
-        }),
-        exit: Exit.succeed("ben"),
-      });
+      // The manager approves — a signal from entirely outside the workflow,
+      // addressed to the declaration itself.
+      yield* wf.completeDeferred(ManagerApproval, workflowId, Exit.succeed("ben"));
 
       // execute on the same payload ATTACHES to the running execution and
       // returns its result — and a repeat execute returns the same result

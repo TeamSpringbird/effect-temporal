@@ -1,4 +1,15 @@
 /**
+ * **Deprecated module** — the Temporal-only patch-marker primitives behind
+ * the `definition` module's engine-agnostic `version` / `versioned`, which
+ * are what applications author with. Scheduled for removal in 0.5.0:
+ *
+ * - `Versioning.match(site, cases)` → `versioned(site, { v1: run1, v2: run2 })`
+ * - `Versioning.version(site, names)` → `version(site, names)`
+ * - `deprecateVersion` / `deprecatePatch` / `patched` → the retirement step
+ *   stays a Temporal concern; it moves to the `bundle` module in 0.5.0.
+ *
+ * The `prefer-definition` lint rule reports every import from this module.
+ *
  * Workflow versioning over Temporal patch markers, for changing workflow
  * code while executions are in flight.
  *
@@ -29,6 +40,7 @@
  *
  * Sandbox-only: this module imports `@temporalio/workflow`.
  *
+ * @deprecated Author with `version` / `versioned` from `definition`. Removed in 0.5.0.
  * @since 0.1.0
  */
 
@@ -54,6 +66,8 @@ export interface Version<Name extends string, A, E, R> {
  * (ordered oldest first). Checked newest-first, so a fresh execution
  * records only the newest marker.
  *
+ * @deprecated Use `version` from `definition` (engine-agnostic; the
+ * Temporal runtime dispatches here). Removed in 0.5.0.
  * @since 0.1.0
  * @category combinators
  */
@@ -73,6 +87,8 @@ export const version = <const Names extends readonly [string, ...string[]]>(
  * patch branch, with the result, error, and service channels unioned across
  * cases.
  *
+ * @deprecated Use `versioned(site, { v1: run1, v2: run2 })` from
+ * `definition` — same markers, engine-agnostic. Removed in 0.5.0.
  * @since 0.1.0
  * @category combinators
  */

@@ -81,6 +81,18 @@ Payloads are decoded (validated) before a handler runs — a payload failing its
 
 An `ActivityRunner` with a service requirement `R` lets handlers use your application services; supply the runner from your `ManagedRuntime`.
 
+### Naming the types
+
+The declaration's decoded types are available as helpers from the definition module — for typing an implementation you write separately, or a service that takes a payload:
+
+```ts
+import type { PayloadOf, SuccessOf, ErrorOf } from "@springbird/effect-temporal/definition";
+
+const reserve = (payload: PayloadOf<typeof Reserve>): Effect.Effect<SuccessOf<typeof Reserve>, ErrorOf<typeof Reserve>> => ...
+```
+
+`AnyTypedActivity` is the type-erased declaration for code generic over any activity; `codecsFor` (from `@springbird/effect-temporal/wire`) builds the three channel codecs from one, for worker-side or test-side code that speaks the wire.
+
 ## Raw calls
 
 `callRawActivity` invokes any Temporal activity proxy as an Effect:

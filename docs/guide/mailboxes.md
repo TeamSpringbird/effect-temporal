@@ -41,20 +41,22 @@ The claim happens synchronously on the taking fiber after the wait, so an interr
 
 ## Offering messages
 
-Offering sides address the declaration's underlying primitive, `StateUpdates.mailbox`. From a **client** — via the `WorkflowClient` service:
+Offering sides address the **declaration itself** — the same `StateUpdates` the handler takes from. From a **client** — via the `WorkflowClient` service:
 
 ```ts
 const wf = yield* WorkflowClient;
-yield* wf.offerMailbox(StateUpdates.mailbox, workflowId, { op: "set", key: "a", value: 1 });
+yield* wf.offerMailbox(StateUpdates, workflowId, { op: "set", key: "a", value: 1 });
 ```
 
-From **another workflow** (workflow → workflow):
+From **another workflow** (workflow → workflow — an engine-level operation, Temporal-only):
 
 ```ts
 import { offerMailbox } from "@springbird/effect-temporal/engine-sandbox";
 
-yield* offerMailbox(Reports.mailbox, { workflowId: orchestratorId, payload: report });
+yield* offerMailbox(Reports, { workflowId: orchestratorId, payload: report });
 ```
+
+Every offering surface also accepts the underlying primitive (`StateUpdates.mailbox`) — the declaration is just the one symbol you never need to unwrap.
 
 Offers are **fire-and-forget**: offering to a closed or unknown execution is a no-op — the receiver finishing first is a normal race, matching `DurableDeferred.done`. On the workflow side, any other delivery failure is also swallowed (logged as a worker warning, never fatal to the offering run); a mailbox offer is not a delivery guarantee. When the sender must *know* the message was handled, use an [update](/guide/updates) instead.
 

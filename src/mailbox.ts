@@ -4,10 +4,10 @@
  * signal (recorded in history, so consumption is deterministic on replay)
  * and buffer until the workflow takes them.
  *
- * This module holds the shared definition and codec; the operations live
- * with their process: `takeMailbox` / `offerMailbox` (workflow → workflow)
- * in `engine-sandbox`, `offerMailbox` (client → workflow) in
- * `engine-client`.
+ * This module holds the shared wire contract (signal name, definition
+ * shape, codec) the engine halves consume. Applications declare mailboxes
+ * with `defineMailbox` from the `definition` module and never import this
+ * one; the `make` constructor here is deprecated.
  *
  * @since 0.1.0
  */
@@ -48,9 +48,11 @@ export interface DurableMailbox<S extends Schema.Top> {
 }
 
 /**
- * Declare a mailbox: a name (unique within the workflows that use it) and
- * the payload schema. Shared by the workflow body and every offering side.
+ * Declare a mailbox primitive (name + payload schema).
  *
+ * @deprecated Use `defineMailbox` from `definition` — its `.take`/`.poll`
+ * run on any engine and every client-side offer accepts the declaration
+ * directly. Removed in 0.5.0.
  * @since 0.1.0
  * @category constructors
  */

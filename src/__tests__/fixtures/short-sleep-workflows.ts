@@ -1,7 +1,8 @@
 import * as Effect from "effect/Effect";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
+import { callRawActivity } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import { ShortSleepDemo } from "./short-sleep-demo.js";
 
 const acts = proxyActivities<{ echo(value: string): Promise<string> }>({

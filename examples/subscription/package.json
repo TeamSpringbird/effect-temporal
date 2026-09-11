@@ -13,7 +13,7 @@
     "@temporalio/testing": "1.19.0",
     "@temporalio/worker": "1.19.0",
     "@temporalio/workflow": "1.19.0",
-    "effect": "4.0.0-beta.101",
+    "effect": "4.0.0-rc.112",
     "@springbird/effect-temporal": "workspace:*"
   },
   "devDependencies": {
