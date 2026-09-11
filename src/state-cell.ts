@@ -6,10 +6,10 @@
  *
  * Temporal query handlers are synchronous and read-only, which is why the
  * abstraction is a published snapshot rather than an on-demand computation.
- * This module holds the shared wire contract (query name, definition shape,
- * codec) the engine halves consume. Applications declare cells with
- * `defineState` from the `definition` module and never import this one; the
- * `make` constructor here is deprecated.
+ * **Internal.** This module holds the shared wire contract (query name,
+ * definition shape, codec) the engine halves consume. It has no package
+ * export: applications declare cells with `defineState` from the
+ * `definition` module.
  *
  * @since 0.1.0
  */
@@ -38,19 +38,6 @@ export interface StateCell<S extends Schema.Top> {
   readonly valueSchema: S;
 }
 
-/**
- * Declare a state-cell primitive (name + value schema).
- *
- * @deprecated Use `defineState` from `definition` — its `.set` runs on any
- * engine and every client-side read accepts the declaration directly.
- * Removed in 0.5.0.
- * @since 0.1.0
- * @category constructors
- */
-export const make = <S extends Schema.Top>(
-  name: string,
-  options: { readonly value: S },
-): StateCell<S> => ({ name, valueSchema: options.value });
 
 /**
  * The wire codec for a cell's value — how snapshots are encoded when

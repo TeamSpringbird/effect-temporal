@@ -21,13 +21,12 @@ The library is one npm package, `@springbird/effect-temporal`, with tree-shakeab
 | Module | Runs in | What it is |
 | --- | --- | --- |
 | `@springbird/effect-temporal/definition` | everywhere | `define*` capability declarations, timers, `continueAsNew`, `executeChild`, `version`/`versioned`, `evolved`, the `WorkflowOps` seam — engine-free |
-| `@springbird/effect-temporal/bundle` | the workflow bundle's entry file | `workflowBundle` — hosts registrations behind the bundle's default export, provides the Temporal `WorkflowOps` |
+| `@springbird/effect-temporal/bundle` | the workflow bundle's entry file | `workflowBundle` — hosts registrations behind the bundle's default export, provides the Temporal `WorkflowOps`; `deprecateVersion` for retiring version names |
 | `@springbird/effect-temporal/engine-sandbox` | the workflow bundle | engine-level escape hatches: raw activity proxies (`callRawActivity`), workflow → workflow offers, Nexus calls |
 | `@springbird/effect-temporal/engine-client` | ordinary Node | the client-side engine + standalone read/signal operations |
 | `@springbird/effect-temporal/client` | ordinary Node | `WorkflowClient` — the one client service |
 | `@springbird/effect-temporal/activities` | worker registration | activity implementation tables (`handle`, `implementActivities`) + the attach bridge |
 | `@springbird/effect-temporal/wire` | engine-level | the wire contract: codecs (`codecsFor`), signal/query names, failure types |
-| `@springbird/effect-temporal/typed-activity`, `/versioning`, and the `make` constructors in `/mailbox`, `/update`, `/state-cell` | — | **deprecated** (removed in 0.5.0): re-exports and aliases of the `definition` surface; the `prefer-definition` lint rule reports them |
 | `@springbird/effect-temporal/nexus` | worker registration | workflow-backed Nexus operations |
 | `@springbird/effect-temporal/testing` | tests | the in-memory `WorkflowOps` runtime, a typed fake Temporal client, a live test harness |
 | `@springbird/effect-temporal/lint` | your lint config | oxlint/ESLint rules for the authoring footguns |

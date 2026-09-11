@@ -43,10 +43,10 @@ The **key order is the chain order**: the first key is the original, unguarded b
 ### The lifecycle of a name
 
 1. **Append** `"v3"`. Deploy. Fresh runs take v3; in-flight runs keep replaying their recorded name.
-2. **Retire** an old name only after every history carrying its marker has closed: remove it from the list and deploy `deprecateVersion(site, name)` in its place for one release. Replaying a *removed* version's history fails loudly rather than silently running the wrong code. (`deprecateVersion` lives in the `versioning` module today — the one non-deprecated reason to import it; it moves to `bundle` in 0.5.0.)
+2. **Retire** an old name only after every history carrying its marker has closed: remove it from the list and deploy `deprecateVersion(site, name)` (from `@springbird/effect-temporal/bundle` — it is Temporal-only, and belongs in the bundle, never in a handler) in its place for one release. Replaying a *removed* version's history fails loudly rather than silently running the wrong code. The raw primitives, `patched(id)` and `deprecatePatch(id)`, are exported from `bundle` too for one-off guards.
 
-::: warning `Versioning.match` is deprecated
-The pre-0.4.0 `versioning` module's `match(site, [{ version, run }])` is the Temporal-only ancestor of `versioned` — same markers, same semantics, but it imports `@temporalio/workflow` and so cannot run in the in-memory runtime. It is deprecated and removed in 0.5.0; `versioned(site, { v1: run1, v2: run2 })` is the drop-in replacement, and the `prefer-definition` lint rule points at it.
+::: details Coming from `Versioning.match`
+The pre-0.4.0 `versioning` module's `match(site, [{ version, run }])` was the Temporal-only ancestor of `versioned` — same markers, same semantics. It was removed in 0.5.0; `versioned(site, { v1: run1, v2: run2 })` is the drop-in replacement (each `{ version, run }` case becomes a `version: run` key), and histories recorded under `match` replay through `versioned` unchanged — the marker ids are the same.
 :::
 
 ### Rules

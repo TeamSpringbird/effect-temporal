@@ -3,12 +3,20 @@
 // through the current bundle
 // =========================================================================
 //
-// `fixtures/histories/definition-order-0.3.0.history.b64` is a real
-// `defOrder` run recorded with the 0.3.0 `definition-workflows` bundle
-// (update, mailbox signal, patch marker, activities, deferred signal). The
-// current bundle must replay it clean: activity types, signal and query
-// names, update names, and patch-marker ids are byte-identical, and the
-// `OrderFlow` handler still issues the same commands in the same order.
+// `fixtures/histories/` holds real runs recorded with earlier bundles:
+//
+//   definition-order-0.3.0     `defOrder` on 0.3.0 — update, mailbox signal,
+//                              patch marker, activities, deferred signal
+//   definition-dispatch-0.4.0  `defDispatch` on 0.4.0 — `versioned` marker +
+//                              an awaited child (`executeChild`) with its
+//                              own activity
+//   definition-grace-0.4.0     `defGrace` on 0.4.0 — a durable timer racing
+//                              a mailbox take (the take wins, timer cancelled)
+//
+// The current bundle must replay every one clean: activity types, signal
+// and query names, update names, child workflow types, timer commands, and
+// patch-marker ids are byte-identical, and each handler still issues the
+// same commands in the same order.
 //
 // Record a new fixture only when a release INTENDS a wire change — and then
 // keep the old one too, so the drill covers every generation still in
@@ -40,5 +48,21 @@ describe("replay compatibility", { concurrent: false }, () => {
 
     const workflowBundle = await bundleWorkflowCode({ workflowsPath });
     await expect(Worker.runReplayHistory({ workflowBundle }, history)).resolves.toBeUndefined();
+  }, 120_000);
+
+  it("replays the 0.4.0 child/versioned and timer/mailbox histories through the current bundle", async () => {
+    const dispatch = loadHistory("definition-dispatch-0.4.0");
+    const dispatchKinds = new Set(dispatch.events.map((event) => event.eventType));
+    expect(dispatchKinds.has(proto.api.enums.v1.EventType.EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED)).toBe(true);
+    expect(dispatchKinds.has(proto.api.enums.v1.EventType.EVENT_TYPE_MARKER_RECORDED)).toBe(true);
+
+    const grace = loadHistory("definition-grace-0.4.0");
+    const graceKinds = new Set(grace.events.map((event) => event.eventType));
+    expect(graceKinds.has(proto.api.enums.v1.EventType.EVENT_TYPE_TIMER_STARTED)).toBe(true);
+    expect(graceKinds.has(proto.api.enums.v1.EventType.EVENT_TYPE_WORKFLOW_EXECUTION_SIGNALED)).toBe(true);
+
+    const workflowBundle = await bundleWorkflowCode({ workflowsPath });
+    await expect(Worker.runReplayHistory({ workflowBundle }, dispatch)).resolves.toBeUndefined();
+    await expect(Worker.runReplayHistory({ workflowBundle }, grace)).resolves.toBeUndefined();
   }, 120_000);
 });

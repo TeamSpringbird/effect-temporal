@@ -4,10 +4,10 @@
  * signal (recorded in history, so consumption is deterministic on replay)
  * and buffer until the workflow takes them.
  *
- * This module holds the shared wire contract (signal name, definition
- * shape, codec) the engine halves consume. Applications declare mailboxes
- * with `defineMailbox` from the `definition` module and never import this
- * one; the `make` constructor here is deprecated.
+ * **Internal.** This module holds the shared wire contract (signal name,
+ * definition shape, codec) the engine halves and `testing` consume. It has
+ * no package export: applications declare mailboxes with `defineMailbox`
+ * from the `definition` module.
  *
  * @since 0.1.0
  */
@@ -47,19 +47,6 @@ export interface DurableMailbox<S extends Schema.Top> {
   readonly payloadSchema: S;
 }
 
-/**
- * Declare a mailbox primitive (name + payload schema).
- *
- * @deprecated Use `defineMailbox` from `definition` — its `.take`/`.poll`
- * run on any engine and every client-side offer accepts the declaration
- * directly. Removed in 0.5.0.
- * @since 0.1.0
- * @category constructors
- */
-export const make = <S extends Schema.Top>(
-  name: string,
-  options: { readonly payload: S },
-): DurableMailbox<S> => ({ name, payloadSchema: options.payload });
 
 /**
  * The wire codec for a mailbox's payload — how messages are encoded by

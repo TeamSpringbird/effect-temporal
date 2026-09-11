@@ -11,7 +11,7 @@ The whole Effect program runs inside the Temporal workflow sandbox. `Activity.ma
 3. **No module-level mutable state in workflow code** — under the worker's default `reuseV8Context`, module-level variables are shared across every workflow instance on a thread. Keep run state inside the handler.
 4. **Never mix the halves** — a module must not import both the sandbox half (`@temporalio/workflow`, `engine-sandbox`) and the client half (`@temporalio/client`, `engine-client`): they can never share a process.
 5. **Evaluate versions on the main fiber** — [version / versioned](/guide/versioning) markers evaluated inside forks or races make marker order nondeterministic.
-6. **Author with the definition module** — the pre-0.4.0 surface (`typed-activity`, `versioning`, the primitive `make` constructors, the per-primitive `engine-sandbox` calls) is deprecated and removed in 0.5.0; every remaining import is a regression waiting to break.
+6. **Author with the definition module** — the pre-0.4.0 surface (`typed-activity`, `versioning`, the primitive `make` constructors, the per-primitive `engine-sandbox` calls) was removed in 0.5.0; a stale import fails to resolve, and this rule tells you what replaced it.
 
 ## Setup
 
@@ -46,7 +46,7 @@ Two presets ship: `recommended` (all six rules, `prefer-call-temporal-activity` 
 
 A file counts as workflow code when it imports `@temporalio/workflow`, the `bundle` module, or the `engine-sandbox` module — the rules are inert elsewhere, so enabling them repo-wide is safe. `no-mixed-halves` applies everywhere by nature. `versioning-on-main-fiber` has one more trigger: importing `version` or `versioned` from the [definition module](/guide/declaring-capabilities) marks the file for that rule (alias-aware), since definition-authored handler modules deliberately import nothing engine-shaped. The other sandbox rules cannot see such modules — a handler that needs them linted can live next to its bundle entry, which imports `bundle`.
 
-`prefer-definition` applies everywhere: it keys off the import source alone (the package specifier or a relative path to one of this package's modules), and its message names the replacement — `defineActivity` for `TypedActivity.make`, `versioned` for `Versioning.match`, the declaration's `.take` for `takeMailbox`, `codecsFor` from `wire`, and so on. Because it is an error in `recommended`, `oxlint` exits non-zero on any file still importing a deprecated symbol — which is what stops a migrated codebase regressing.
+`prefer-definition` applies everywhere: it keys off the import source alone (the package specifier or a relative path to one of this package's modules), and its message names the replacement — `defineActivity` for `TypedActivity.make`, `versioned` for `Versioning.match`, the declaration's `.take` for `takeMailbox`, `codecsFor` from `wire`, `bundle` for a `workflowBundle` import from `engine-sandbox`, and so on. Because it is an error in `recommended`, `oxlint` exits non-zero on any file still importing a removed symbol — a migration guide that runs as a lint.
 
 The remaining footguns — drain mailboxes before `continueAsNew`, respond to updates before completion — are runtime-shaped and covered by runtime guards and the guide instead.
 
@@ -57,4 +57,4 @@ The remaining footguns — drain mailboxes before `continueAsNew`, respond to up
 | `no-mixed-halves` | one module importing both process halves |
 | `prefer-call-temporal-activity` | raw `Effect.promise` where a cancellable call belongs |
 | `versioning-on-main-fiber` | `version` / `versioned` / `Versioning.*` inside `fork` / `race` / `all` |
-| `prefer-definition` | any import of a deprecated symbol (removed in 0.5.0), with its replacement |
+| `prefer-definition` | any import of the pre-0.4.0 surface (removed in 0.5.0), with its replacement |
