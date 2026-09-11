@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
-import { workflowBundle } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import {
   Approved,
   CurrentLanguage,

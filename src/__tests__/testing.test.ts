@@ -9,6 +9,7 @@ import { makeWorkflowClient } from "../client.js";
 import { decodeWorkflowResult, makeFakeTemporalClient, simulateAlreadyStarted } from "../testing.js";
 import { wireCodecsFor } from "../wire.js";
 import { Demo } from "./fixtures/demo.js";
+import { Priority } from "./fixtures/definition-demo.js";
 
 const payload = { requestId: "fake-1", mode: "approve" } as const;
 
@@ -92,5 +93,20 @@ describe("decodeWorkflowResult", () => {
     const wire = wireCodecsFor(Demo).encodeExit(Exit.die(new Error("boom")));
 
     expect(() => decodeWorkflowResult(Demo, wire)).toThrow(/boom/);
+  });
+
+  it("offers to a declared mailbox through the fake and reads the offers back typed", async () => {
+    const fake = makeFakeTemporalClient();
+    await Effect.runPromise(fake.offer(Priority, "wf-5", { level: 3 }));
+    await Effect.runPromise(fake.offer(Priority.mailbox, "wf-6", { level: 1 }));
+
+    // No wire constants needed on either side: the offers are decoded
+    // through the declaration's own schema.
+    expect(fake.offersTo(Priority)).toEqual([
+      { workflowId: "wf-5", payload: { level: 3 } },
+      { workflowId: "wf-6", payload: { level: 1 } },
+    ]);
+    // ...and they are ordinary recorded signals underneath.
+    expect(fake.signals.map((signal) => signal.workflowId)).toEqual(["wf-5", "wf-6"]);
   });
 });

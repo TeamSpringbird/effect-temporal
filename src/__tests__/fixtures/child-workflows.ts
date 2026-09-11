@@ -11,7 +11,8 @@ import * as Activity from "effect/unstable/workflow/Activity";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
+import { callRawActivity } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import { ChildDemo, ParentDemo } from "./child-demo.js";
 
 const acts = proxyActivities<{

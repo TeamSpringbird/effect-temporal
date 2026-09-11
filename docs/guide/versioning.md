@@ -25,25 +25,29 @@ The result is typed as the literal union of exactly the names given, so a `switc
 
 Evolving a site is appending a name. Adopting `version` on an existing workflow is safe.
 
+### The run-table form: `versioned`
+
+Branching by hand on the returned name is error-prone at exactly the site where determinism matters. `versioned` takes the behaviors themselves — one effect per name, keyed **oldest first**:
+
+```ts
+import { versioned } from "@springbird/effect-temporal/definition";
+
+const result = yield* versioned("pricing", {
+  v1: originalPricing,
+  v2: revisedPricing,
+});
+```
+
+The **key order is the chain order**: the first key is the original, unguarded behavior; each later key is guarded by its own marker (`pricing-v2`, …). The selected case runs, and result, error, and service channels are unioned across cases. Same markers, same lifecycle, same replay semantics as `version` — it is `version` plus the lookup. The [lint rule](/guide/lint-rules) `versioning-on-main-fiber` covers both calls.
+
 ### The lifecycle of a name
 
 1. **Append** `"v3"`. Deploy. Fresh runs take v3; in-flight runs keep replaying their recorded name.
-2. **Retire** an old name only after every history carrying its marker has closed: remove it from the list and deploy `deprecateVersion(site, name)` (from `@springbird/effect-temporal/versioning`) in its place for one release. Replaying a *removed* version's history fails loudly rather than silently running the wrong code.
+2. **Retire** an old name only after every history carrying its marker has closed: remove it from the list and deploy `deprecateVersion(site, name)` in its place for one release. Replaying a *removed* version's history fails loudly rather than silently running the wrong code. (`deprecateVersion` lives in the `versioning` module today — the one non-deprecated reason to import it; it moves to `bundle` in 0.5.0.)
 
-### The low-level module: `Versioning.match`
-
-For a multi-way marker match with per-case effects in one expression, the `versioning` module remains the low-level surface:
-
-```ts
-import * as Versioning from "@springbird/effect-temporal/versioning";
-
-const result = yield* Versioning.match("pricing", [
-  { version: "v1", run: originalPricing },
-  { version: "v2", run: revisedPricing },
-]);
-```
-
-Result, error, and service channels are unioned across cases; marker semantics are identical to `version`. The raw primitives are exported too: `patched(id)` is the boolean guard, `deprecatePatch(id)` is Temporal's phase-two marker. Note that the `versioning` module talks to the sandbox directly, so it is Temporal-only — `version` from the definition module is the engine-agnostic form.
+::: warning `Versioning.match` is deprecated
+The pre-0.4.0 `versioning` module's `match(site, [{ version, run }])` is the Temporal-only ancestor of `versioned` — same markers, same semantics, but it imports `@temporalio/workflow` and so cannot run in the in-memory runtime. It is deprecated and removed in 0.5.0; `versioned(site, { v1: run1, v2: run2 })` is the drop-in replacement, and the `prefer-definition` lint rule points at it.
+:::
 
 ### Rules
 

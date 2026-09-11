@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
-import { workflowBundle, sleepUntil } from "../../engine-sandbox.js";
+import { sleepUntil } from "../../definition.js";
+import { workflowBundle } from "../../bundle.js";
 import { Reserve, TypedActivityDemo } from "./typed-activity-demo.js";
 
 // Exercises the typed seam end-to-end: an absolute-time durable sleep, a

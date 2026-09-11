@@ -3,7 +3,7 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import { workflowBundle } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import {
   DeadlineUpdates,
   StateDemo,

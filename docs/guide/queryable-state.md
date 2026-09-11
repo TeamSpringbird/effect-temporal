@@ -21,16 +21,16 @@ Each publish replaces the previous snapshot. Publish after every state change yo
 
 ## Reading (client side)
 
-Readers address the declaration's underlying primitive, `CurrentLanguage.cell`:
+Readers address the declaration itself (the underlying primitive, `CurrentLanguage.cell`, is accepted too):
 
 ```ts
 const wf = yield* WorkflowClient;
-const snapshot = yield* wf.readStateCell(CurrentLanguage.cell, workflowId);
+const snapshot = yield* wf.readStateCell(CurrentLanguage, workflowId);
 // Option.none() while the execution is unknown or the cell unpublished;
 // Option.some(typed value) otherwise — including after the run closed.
 ```
 
-Without the service, the standalone form is `readStateCell(CurrentLanguage.cell, { client, workflowId })` from `@springbird/effect-temporal/engine-client`.
+Without the service, the standalone form is `readStateCell(CurrentLanguage, { client, workflowId })` from `@springbird/effect-temporal/engine-client`.
 
 ## Why snapshots, not query functions
 

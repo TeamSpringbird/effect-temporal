@@ -27,9 +27,9 @@ One declaration is the whole contract: the workflow bundle calls it, the worker 
 
 ## The one seam: `WorkflowOps`
 
-Every in-handler operation requires exactly one service, `WorkflowOps` — the seam an engine implements (one operation per primitive kind). The handler itself imports **nothing engine-shaped**: no `engine-sandbox`, no `@temporalio/*`.
+Every in-handler operation requires exactly one service, `WorkflowOps` — the seam an engine implements (one operation per primitive kind). The handler itself imports **nothing engine-shaped**: no `engine-sandbox`, no `@temporalio/*`. The only sandbox-side import an application has is `workflowBundle`, in the bundle's entry file, from `@springbird/effect-temporal/bundle`.
 
-- **On Temporal** — `workflowBundle` provides the Temporal `WorkflowOps` automatically: activity calls become real Temporal activities, `await`/`take` block on signals in history, `set` publishes to a query, `version` records patch markers.
+- **On Temporal** — `workflowBundle` provides the Temporal `WorkflowOps` automatically: activity calls become real Temporal activities, `await`/`take` block on signals in history, `set` publishes to a query, `sleep` is a durable timer, `executeChild` is `startChild`, `continueAsNew` is continue-as-new, `version` records patch markers.
 - **In tests** — `makeTestWorkflowOps` (the [testing module](/guide/testing#the-in-memory-runtime)) provides an in-memory `WorkflowOps`, so the *same handler function* runs in a plain unit test with no engine, no sandbox, no server.
 
 ## The surface
@@ -37,13 +37,28 @@ Every in-handler operation requires exactly one service, `WorkflowOps` — the s
 | Declaration | Inside the handler | Outside the handler |
 | --- | --- | --- |
 | `defineActivity(name, { payload, success?, error?, options? })` | `yield* Charge(payload)` — typed success, typed error channel | implemented on the worker: `handle(Charge, impl)` + `implementActivities` |
-| `defineDeferred(name, { success })` | `yield* Approval.await` | `Approval.deferred` → `DurableDeferred.done`, `wf.deferredState` |
-| `defineMailbox(name, { payload })` | `yield* Priority.take` / `yield* Priority.poll` | `Priority.mailbox` → `wf.offerMailbox` |
-| `defineUpdate(name, { payload, success, error })` | `yield* SetAmount.take` — respond exactly once | `SetAmount.update` → `wf.executeUpdate` |
-| `defineState(name, { value })` | `yield* Status.set(value)` | `Status.cell` → `wf.readStateCell` |
-| `version(site, names)` | `yield* version("pricing", ["v1", "v2"])` | — ([versioning](/guide/versioning)) |
+| `defineDeferred(name, { success })` | `yield* Approval.await` | `wf.completeDeferred(Approval, id, exit)`, `wf.deferredState(Approval, id)` |
+| `defineMailbox(name, { payload })` | `yield* Priority.take` / `yield* Priority.poll` | `wf.offerMailbox(Priority, id, payload)` |
+| `defineUpdate(name, { payload, success, error })` | `yield* SetAmount.take` — respond exactly once | `wf.executeUpdate(SetAmount, id, payload)` |
+| `defineState(name, { value })` | `yield* Status.set(value)` | `wf.readStateCell(Status, id)` |
 
-Each declaration carries its **underlying primitive** — `Approval.deferred`, `Priority.mailbox`, `SetAmount.update`, `Status.cell`, and a defined activity *is* its `TypedActivity` — which is what the client-side surfaces (`WorkflowClient`, the standalone `engine-client` operations, `DurableDeferred.done`) take. The low-level modules (`/typed-activity`, `/mailbox`, `/update`, `/state-cell`) are those definitions; `define*` is the one-declaration surface over them.
+And the operations that need no declaration — all from the same module, all requiring only `WorkflowOps`:
+
+| Operation | What it does | Guide |
+| --- | --- | --- |
+| `sleep({ name, duration })` | durable named timer | [Timers](/guide/timers-and-approvals) |
+| `sleepUntil({ name, timestamp })` | durable timer to an absolute instant; no-op when past | [Timers](/guide/timers-and-approvals#sleeping-until-an-absolute-time) |
+| `continueAsNew(workflow, payload, options?)` | end this run, start a fresh one with the payload | [Continue-as-new](/guide/continue-as-new) |
+| `executeChild(workflow, payload, { discard? })` | start a child workflow, awaited or fire-and-forget | [Child workflows](/guide/child-workflows) |
+| `version(site, names)` | patch-marker branch by name | [Versioning](/guide/versioning) |
+| `versioned(site, { v1: run1, v2: run2 })` | patch-marker branch, run-table form | [Versioning](/guide/versioning#the-run-table-form-versioned) |
+| `evolved(current, legacy, migrate)` | schema evolution across in-flight runs | [Versioning](/guide/versioning#schema-evolution-evolved) |
+
+**The declaration is the only symbol you ever name.** Every client-side surface — the `WorkflowClient` service, the standalone `engine-client` operations, the [in-memory test world](/guide/testing#the-in-memory-runtime), the fake client, the live harness — takes the declaration directly. Each declaration still carries its underlying primitive (`Approval.deferred`, `Priority.mailbox`, `SetAmount.update`, `Status.cell`; a defined activity *is* its `TypedActivity` projection) for engine-level code, and every surface accepts that too. The decoded types are named with `PayloadOf<typeof Charge>`, `SuccessOf<…>`, `ErrorOf<…>` from this module.
+
+::: warning Deprecated authoring surface
+The pre-0.3.0 modules — `/typed-activity`, `/versioning`, the `make` constructors of `/mailbox`, `/update`, `/state-cell`, and the per-primitive calls in `/engine-sandbox` (`callActivity`, `takeMailbox`, `takeUpdate`, `setStateCell`, `sleepUntil`, `continueAsNew`) — are **deprecated in 0.4.0 and removed in 0.5.0**. Each has a replacement here; the [`prefer-definition` lint rule](/guide/lint-rules) names it at every remaining import.
+:::
 
 ::: info Schemas must be context-free
 A declaration's schemas cross the ops seam with their service requirements erased — a schema that needs decoding or encoding services would defect at runtime. Use plain, self-contained schemas at declaration boundaries.
@@ -57,5 +72,5 @@ The explicit name string — `"charge"`, `"order/approval"` — is the identity 
 
 Two axes, two tools, both in the definition module:
 
-- **Logic changes** at a code site: `version(site, names)` — patch markers under Temporal, so in-flight histories replay the code they recorded. See [Versioning](/guide/versioning).
+- **Logic changes** at a code site: `version(site, names)` (branch by name) or `versioned(site, cases)` (run table) — patch markers under Temporal, so in-flight histories replay the code they recorded. See [Versioning](/guide/versioning).
 - **Data changes** in a declared schema: `evolved(current, legacy, migrate)` — decode tries the newest shape first, migrates legacy wire forward through a pure function, and handlers only ever see the newest Type. See [Schema evolution](/guide/versioning#schema-evolution-evolved).

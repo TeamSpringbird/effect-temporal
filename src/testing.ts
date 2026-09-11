@@ -15,7 +15,9 @@
  */
 
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -26,10 +28,21 @@ import type * as Workflow from "effect/unstable/workflow/Workflow";
 import type { ActivityRunner, BoundActivity } from "./activities.js";
 import { makeWorkflowClient, type WorkflowStartOptions } from "./client.js";
 import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/client";
-import type { PayloadOf, SuccessOf } from "./client.js";
-import { WorkflowOps, type UpdateRequest, type WorkflowOpsRuntime } from "./definition.js";
-import { codecsFor } from "./typed-activity.js";
-import { wireCodecsFor, wireValueCodec } from "./wire.js";
+import type { ErrorOf, PayloadOf, SuccessOf } from "./client.js";
+import {
+  sleepUntilTarget,
+  toMailbox,
+  WorkflowOps,
+  type DeferredLike,
+  type MailboxLike,
+  type StateCellLike,
+  type UpdateLike,
+  type UpdateRequest,
+  type WorkflowOpsRuntime,
+} from "./definition.js";
+import { offerMailbox } from "./engine-client.js";
+import { MAILBOX_SIGNAL, mailboxCodec, type MailboxSignalPayload } from "./mailbox.js";
+import { codecsFor, wireCodecsFor, wireValueCodec } from "./wire.js";
 
 /**
  * One recorded `workflow.start` call, as the fake captured it.
@@ -96,6 +109,18 @@ export interface FakeTemporalClientOptions {
 }
 
 /**
+ * One mailbox offer the fake captured, decoded through the mailbox's own
+ * payload schema.
+ *
+ * @since 0.4.0
+ * @category models
+ */
+export interface RecordedMailboxOffer<P> {
+  readonly workflowId: string;
+  readonly payload: P;
+}
+
+/**
  * The fake: a `Client`-shaped double plus the typed records of everything
  * that was started, signalled, or terminated through it.
  *
@@ -109,6 +134,21 @@ export interface FakeTemporalClient {
   readonly starts: ReadonlyArray<RecordedWorkflowStart>;
   readonly signals: ReadonlyArray<RecordedWorkflowSignal>;
   readonly terminations: ReadonlyArray<RecordedWorkflowTermination>;
+  /** Offer to a declared mailbox THROUGH the fake, exactly as a client
+   * would — lands in `signals` and `offersTo`. Takes the declaration
+   * (`Priority`) or its underlying primitive; no wire constants needed.
+   * @since 0.4.0 */
+  readonly offer: <S extends Schema.Top>(
+    mailbox: MailboxLike<S>,
+    workflowId: string,
+    payload: S["Type"],
+  ) => Effect.Effect<void>;
+  /** The offers recorded for one declared mailbox, payloads decoded
+   * through its schema — assert on domain values, not signal args.
+   * @since 0.4.0 */
+  readonly offersTo: <S extends Schema.Top>(
+    mailbox: MailboxLike<S>,
+  ) => ReadonlyArray<RecordedMailboxOffer<S["Type"]>>;
 }
 
 /**
@@ -244,7 +284,26 @@ export const makeFakeTemporalClient = (
     },
   ) as unknown as Client;
 
-  return { client, starts, signals, terminations };
+  const fake: FakeTemporalClient = {
+    client,
+    starts,
+    signals,
+    terminations,
+    offer: (mailbox, workflowId, payload) => offerMailbox(mailbox, { client, workflowId, payload }),
+    offersTo: (mailboxLike) => {
+      const mailbox = toMailbox(mailboxLike);
+      const decode = mailboxCodec(mailbox).decode;
+      return signals.flatMap((signal) => {
+        if (signal.signalName !== MAILBOX_SIGNAL) return [];
+        // SAFETY: every MAILBOX_SIGNAL the fake records was produced by
+        // `offerMailbox`, whose one argument is this payload shape.
+        const carried = signal.args[0] as MailboxSignalPayload | undefined;
+        if (carried === undefined || carried.mailboxName !== mailbox.name) return [];
+        return [{ workflowId: signal.workflowId, payload: decode(carried.payload) }];
+      });
+    },
+  };
+  return fake;
 };
 
 /**
@@ -333,6 +392,30 @@ export interface HarnessClient {
     payload: P["Type"],
     options?: WorkflowStartOptions,
   ): Promise<void>;
+  /** Offer to a running workflow's declared mailbox. @since 0.4.0 */
+  offer<S extends Schema.Top>(
+    mailbox: MailboxLike<S>,
+    workflowId: string,
+    payload: S["Type"],
+  ): Promise<void>;
+  /** Send a declared update and await its typed response (typed failures
+   * reject). @since 0.4.0 */
+  request<P extends Schema.Top, S extends Schema.Top, E extends Schema.Top>(
+    update: UpdateLike<P, S, E>,
+    workflowId: string,
+    payload: P["Type"],
+  ): Promise<S["Type"]>;
+  /** Read a declared state cell's latest snapshot. @since 0.4.0 */
+  stateOf<S extends Schema.Top>(
+    cell: StateCellLike<S>,
+    workflowId: string,
+  ): Promise<Option.Option<S["Type"]>>;
+  /** Complete a declared deferred with a success value. @since 0.4.0 */
+  resolve<Success extends Schema.Constraint, Error extends Schema.Constraint>(
+    deferred: DeferredLike<Success, Error>,
+    workflowId: string,
+    value: Success["Type"],
+  ): Promise<void>;
   readonly raw: Client;
 }
 
@@ -404,6 +487,13 @@ export const startWorkflowTestHarness = async (
         execute: (workflow, payload, opts) =>
           Effect.runPromise(wf.execute(workflow, payload, opts)),
         start: (workflow, payload, opts) => Effect.runPromise(wf.start(workflow, payload, opts)),
+        offer: (mailbox, workflowId, payload) =>
+          Effect.runPromise(wf.offerMailbox(mailbox, workflowId, payload)),
+        request: (update, workflowId, payload) =>
+          Effect.runPromise(wf.executeUpdate(update, workflowId, payload)),
+        stateOf: (cell, workflowId) => Effect.runPromise(wf.readStateCell(cell, workflowId)),
+        resolve: (deferred, workflowId, value) =>
+          Effect.runPromise(wf.completeDeferred(deferred, workflowId, Exit.succeed(value))),
         raw: env.client,
       };
       return worker.runUntil(() => body(client, taskQueue));
@@ -412,6 +502,62 @@ export const startWorkflowTestHarness = async (
 };
 
 // ─── In-memory WorkflowOps ───────────────────────────────────────────────────
+
+/**
+ * One workflow definition paired with its handler, for the in-memory
+ * runtime to run as a CHILD when a handler calls `executeChild` — the
+ * workflow-side twin of `BoundActivity`. Produced by `handleWorkflow`.
+ *
+ * @since 0.4.0
+ * @category models
+ */
+export interface BoundWorkflow {
+  readonly workflow: Workflow.Any;
+  readonly execute: (
+    payload: never,
+    executionId: string,
+  ) => Effect.Effect<unknown, unknown, WorkflowOps>;
+}
+
+/**
+ * Bind a workflow definition to the handler the in-memory runtime should
+ * run when a parent calls `executeChild(workflow, payload)` — the same
+ * handler function `workflow.toLayer` hosts on Temporal:
+ *
+ * ```ts
+ * makeTestWorkflowOps({ workflows: [handleWorkflow(Child, childHandler)] })
+ * ```
+ *
+ * @since 0.4.0
+ * @category constructors
+ */
+export const handleWorkflow = <W extends Workflow.Any>(
+  workflow: W,
+  handler: (
+    payload: PayloadOf<W>,
+    executionId: string,
+  ) => Effect.Effect<SuccessOf<W>, ErrorOf<W>, WorkflowOps>,
+): BoundWorkflow => ({
+  workflow,
+  // SAFETY: the runtime decodes the payload through this workflow's own
+  // codec before calling execute, so the value really is PayloadOf<W>; the
+  // channels widen to unknown for the erased record.
+  execute: (payload, executionId) => handler(payload as PayloadOf<W>, executionId),
+});
+
+/**
+ * What the in-memory runtime recorded when a handler called
+ * `continueAsNew`: the workflow and the payload the next run WOULD receive,
+ * round-tripped through the workflow's payload schema.
+ *
+ * @since 0.4.0
+ * @category models
+ */
+export interface ContinuedAsNew {
+  readonly workflow: Workflow.Any;
+  readonly payload: unknown;
+  readonly memo: Record<string, unknown> | undefined;
+}
 
 /**
  * A running in-memory world for handler unit tests: provide `layer` to a
@@ -424,6 +570,15 @@ export const startWorkflowTestHarness = async (
 export interface TestWorkflowOps {
   /** Provides `WorkflowOps` backed by this world. */
   readonly layer: Layer.Layer<WorkflowOps>;
+  /** `Some` once a handler in this world called `continueAsNew` (its fiber
+   * was interrupted at that point); the payload is what the next run would
+   * decode. @since 0.4.0 */
+  readonly continuedAsNew: Effect.Effect<Option.Option<ContinuedAsNew>>;
+  /** `continuedAsNew`, typed against one workflow: `Some(payload)` when the
+   * recorded continuation is for `workflow`. @since 0.4.0 */
+  readonly continuedAsNewOf: <W extends Workflow.Any>(
+    workflow: W,
+  ) => Effect.Effect<Option.Option<PayloadOf<W>>>;
   /** Resolve a declared deferred, waking any handler blocked on `.await`. */
   readonly resolve: <A>(
     deferred: { readonly deferred: object; readonly await: Effect.Effect<A, never, WorkflowOps> },
@@ -472,14 +627,34 @@ export interface TestWorkflowOps {
  * one update dies (as the engine does), and `version` always answers the
  * newest name — there is no replay in memory.
  *
+ * Timers (`sleep`, `sleepUntil`) follow Effect's `Clock`: provide
+ * `TestClock.layer()` and `adjust` past them — they are NOT instant, so a
+ * mailbox-take racing a grace-period timer is testable in both orders.
+ * `continueAsNew` interrupts the handler fiber and records the continuation
+ * (`continuedAsNew`). `executeChild` runs the child's `handleWorkflow`
+ * binding in-process (payload, success, and error round-tripped through
+ * the child's schemas; a taken execution id attaches, as on Temporal);
+ * `{ discard: true }` forks it and returns the execution id.
+ *
  * @since 0.3.0
  * @category constructors
  */
 export const makeTestWorkflowOps = (options?: {
   readonly activities?: ReadonlyArray<BoundActivity<never, string>>;
+  /** Child handlers `executeChild` can run. @since 0.4.0 */
+  readonly workflows?: ReadonlyArray<BoundWorkflow>;
 }): Effect.Effect<TestWorkflowOps> =>
   Effect.sync(() => {
     const bindings = new Map((options?.activities ?? []).map((b) => [b.activity.name, b]));
+    const workflowBindings = new Map(
+      (options?.workflows ?? []).map((b) => [b.workflow._tag, b]),
+    );
+    /** execution id → the child run's exit, so a second start of a taken
+     * id attaches (the idempotency contract, in memory). */
+    const childRuns = new Map<string, Deferred.Deferred<Exit.Exit<unknown, unknown>>>();
+    let continued: Option.Option<ContinuedAsNew> = Option.none();
+    // Assigned below; the child op needs the layer that hosts it.
+    let layer: Layer.Layer<WorkflowOps>;
     const runner: ActivityRunner<never> = {
       run: (_name, _payload, effect) => Effect.runPromiseExit(effect),
     };
@@ -567,10 +742,70 @@ export const makeTestWorkflowOps = (options?: {
       stateSet: (cell, value) =>
         Effect.sync(() => void cells.set(cell, roundTrip(cell.valueSchema, value))),
       version: (_site, names) => Effect.succeed(names[names.length - 1] ?? names[0]),
+      sleep: (options) => Effect.sleep(options.duration),
+      sleepUntil: (options) =>
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis;
+          const target = yield* sleepUntilTarget(options);
+          const delay = target - now;
+          if (delay > 0) yield* Effect.sleep(Duration.millis(delay));
+        }),
+      continueAsNew: (workflow, payload, options) =>
+        Effect.suspend(() => {
+          const codecs = wireCodecsFor(workflow);
+          continued = Option.some({
+            workflow,
+            payload: codecs.decodePayload(codecs.encodePayload(payload)),
+            memo: options?.memo,
+          });
+          return Effect.interrupt;
+        }),
+      executeChild: (workflow, payload, { discard }) =>
+        Effect.gen(function* () {
+          const binding = workflowBindings.get(workflow._tag);
+          if (binding === undefined) {
+            return yield* Effect.die(
+              `makeTestWorkflowOps: no binding for workflow "${workflow._tag}" — pass \`handleWorkflow(${workflow._tag}, handler)\` in \`workflows\``,
+            );
+          }
+          const codecs = wireCodecsFor(workflow);
+          const decoded = codecs.decodePayload(codecs.encodePayload(payload));
+          const executionId = yield* workflow.executionId(decoded);
+          let run = childRuns.get(executionId);
+          if (run === undefined) {
+            const created = Deferred.makeUnsafe<Exit.Exit<unknown, unknown>>();
+            childRuns.set(executionId, created);
+            run = created;
+            // The child's exit crosses the same wire the parent would read
+            // on Temporal: success/error round-tripped through ITS schemas.
+            // SAFETY: `decoded` came through this workflow's own codec.
+            const child = binding.execute(decoded as never, executionId).pipe(
+              Effect.provide(layer),
+              Effect.exit,
+              Effect.map((exit) => codecs.decodeExit(codecs.encodeExit(exit))),
+              Effect.flatMap((exit) => Deferred.done(created, Exit.succeed(exit))),
+            );
+            yield* Effect.forkDetach(child);
+          }
+          if (discard) return executionId;
+          return yield* Effect.flatten(Deferred.await(run));
+        }),
     };
 
+    layer = Layer.succeed(WorkflowOps, runtime);
     const world: TestWorkflowOps = {
-      layer: Layer.succeed(WorkflowOps, runtime),
+      layer,
+      continuedAsNew: Effect.sync(() => continued),
+      continuedAsNewOf: (workflow) =>
+        Effect.sync(() =>
+          Option.flatMap(continued, (entry) =>
+            // SAFETY: the recorded payload was decoded through THIS
+            // workflow's payload codec when the tags match.
+            entry.workflow._tag === workflow._tag
+              ? Option.some(entry.payload as never)
+              : Option.none(),
+          ),
+        ),
       resolve: (wrapper, value) =>
         Effect.asVoid(Deferred.done(deferredFor(wrapper.deferred), Exit.succeed(value))),
       offer: (wrapper, payload) =>

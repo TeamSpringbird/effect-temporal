@@ -1,6 +1,6 @@
 {
   "name": "@springbird/effect-temporal",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Run `effect/unstable/workflow` programs (Workflow / Activity / DurableClock / DurableDeferred) on a Temporal engine, plus durable mailboxes, updates, queryable state, versioning, schedules, and Nexus operations.",
   "license": "MIT",
   "type": "module",
@@ -21,6 +21,10 @@
     "./activities": {
       "types": "./dist/activities.d.ts",
       "default": "./dist/activities.js"
+    },
+    "./bundle": {
+      "types": "./dist/bundle.d.ts",
+      "default": "./dist/bundle.js"
     },
     "./client": {
       "types": "./dist/client.d.ts",
@@ -93,7 +97,7 @@
     "@temporalio/testing": "~1.19.0",
     "@temporalio/worker": "~1.19.0",
     "@temporalio/workflow": "~1.19.0",
-    "effect": "4.0.0-beta.101"
+    "effect": "4.0.0-rc.112"
   },
   "peerDependenciesMeta": {
     "@temporalio/nexus": {
@@ -111,12 +115,14 @@
   },
   "devDependencies": {
     "@temporalio/client": "1.19.0",
+    "@temporalio/common": "1.19.0",
     "@temporalio/nexus": "1.19.0",
+    "@temporalio/proto": "1.19.0",
     "@temporalio/testing": "1.19.0",
     "@temporalio/worker": "1.19.0",
     "@temporalio/workflow": "1.19.0",
     "@types/node": "^22.19.9",
-    "effect": "4.0.0-beta.101",
+    "effect": "4.0.0-rc.112",
     "nexus-rpc": "^0.0.2",
     "oxlint": "1.77.0",
     "typescript": "^5.9.0",

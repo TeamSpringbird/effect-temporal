@@ -20,15 +20,8 @@ import type * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { ApplicationFailure, WorkflowNotFoundError, type Client } from "@temporalio/client";
 import { classifyThrown } from "./thrown.js";
-import {
-  ACTIVITY_EXIT_TYPE,
-  codecsFor,
-  type AnyTypedActivity,
-  type ErrorOf,
-  type PayloadOf,
-  type SuccessOf,
-} from "./typed-activity.js";
-import type { EffectWorkflowBridgeResult } from "./wire.js";
+import type { AnyTypedActivity, ErrorOf, PayloadOf, SuccessOf } from "./definition.js";
+import { ACTIVITY_EXIT_TYPE, codecsFor, type EffectWorkflowBridgeResult } from "./wire.js";
 
 const classifyFailure = (error: unknown): EffectWorkflowBridgeResult => {
   const thrown = classifyThrown(error);

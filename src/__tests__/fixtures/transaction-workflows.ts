@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as DurableClock from "effect/unstable/workflow/DurableClock";
 import { condition } from "@temporalio/workflow";
-import { workflowBundle } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import { GetConfirmation, TransactionDemo } from "./transaction-demo.js";
 
 const TransactionDemoLive = TransactionDemo.toLayer(() =>

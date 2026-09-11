@@ -6,7 +6,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, workflowBundle } from "../../engine-sandbox.js";
+import { callRawActivity } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import * as Versioning from "../../versioning.js";
 import { ChainDemo } from "./chain-demo.js";
 

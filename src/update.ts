@@ -1,10 +1,12 @@
 /**
  * Request/response into a running workflow — Temporal updates with typed
  * channels: the caller gets the handler's typed success or typed failure
- * back, unlike a fire-and-forget mailbox message. The workflow body takes
- * requests with `takeUpdate` (engine-sandbox) and answers each through its
- * `respond`; clients call `executeUpdate` (engine-client) and receive the
- * response in the Effect error/success channels.
+ * back, unlike a fire-and-forget mailbox message. This module holds the
+ * shared wire contract (update name, definition shape, codec) the engine
+ * halves consume. Applications declare updates with `defineUpdate` from the
+ * `definition` module (`.take` in the handler, `wf.executeUpdate` from
+ * clients) and never import this one; the `make` constructor here is
+ * deprecated.
  *
  * The response always travels as a wire-encoded Exit in the update RESULT
  * (the update itself never fails), so typed failures round-trip without a
@@ -52,10 +54,11 @@ export interface DurableUpdate<P extends Schema.Top, S extends Schema.Top, E ext
 }
 
 /**
- * Declare an update: a name (unique within the workflows that use it), the
- * request payload schema, and the response's success/error schemas. Shared
- * by the workflow body and every calling side.
+ * Declare an update primitive (name + payload/success/error schemas).
  *
+ * @deprecated Use `defineUpdate` from `definition` — its `.take` runs on any
+ * engine and every client-side request accepts the declaration directly.
+ * Removed in 0.5.0.
  * @since 0.1.0
  * @category constructors
  */

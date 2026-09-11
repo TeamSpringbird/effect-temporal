@@ -5,7 +5,8 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, workflowBundle, offerMailbox } from "../../engine-sandbox.js";
+import { callRawActivity, offerMailbox } from "../../engine-sandbox.js";
+import { workflowBundle } from "../../bundle.js";
 import { AcquireRequests, ContenderDemo, Grants, LockDemo, Releases } from "./lock-demo.js";
 
 const acts = proxyActivities<{

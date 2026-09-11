@@ -6,9 +6,10 @@
  *
  * Temporal query handlers are synchronous and read-only, which is why the
  * abstraction is a published snapshot rather than an on-demand computation.
- * This module holds the shared definition and codec; the operations live
- * with their process: `setStateCell` in `engine-sandbox`, `readStateCell`
- * in `engine-client`.
+ * This module holds the shared wire contract (query name, definition shape,
+ * codec) the engine halves consume. Applications declare cells with
+ * `defineState` from the `definition` module and never import this one; the
+ * `make` constructor here is deprecated.
  *
  * @since 0.1.0
  */
@@ -38,9 +39,11 @@ export interface StateCell<S extends Schema.Top> {
 }
 
 /**
- * Declare a state cell: a name (unique within the workflows that use it)
- * and the value schema. Shared by the workflow body and every reading side.
+ * Declare a state-cell primitive (name + value schema).
  *
+ * @deprecated Use `defineState` from `definition` — its `.set` runs on any
+ * engine and every client-side read accepts the declaration directly.
+ * Removed in 0.5.0.
  * @since 0.1.0
  * @category constructors
  */

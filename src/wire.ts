@@ -21,6 +21,7 @@
 import type * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import type * as Workflow from "effect/unstable/workflow/Workflow";
+import type { AnyTypedActivity, ErrorOf, PayloadOf, SuccessOf } from "./definition.js";
 
 /**
  * Signal by which `deferredDone` reaches a running workflow.
@@ -48,6 +49,14 @@ export const DEFERRED_STATE_QUERY = "effect-workflow-deferred-state";
  * @category wire
  */
 export const EXIT_FAILURE_TYPE = "EffectWorkflowExit";
+
+/**
+ * `ApplicationFailure.type` carrying a typed activity failure in `details[0]`.
+ *
+ * @since 0.4.0
+ * @category wire
+ */
+export const ACTIVITY_EXIT_TYPE = "EffectActivityExit";
 
 /**
  * The attach bridge's activity name — see `activities.ts`.
@@ -238,3 +247,33 @@ export const wireCodecsFor = (workflow: Workflow.Any): WorkflowWireCodecs => {
     decodeExit: exit.decode,
   };
 };
+
+/**
+ * The wire codecs for a declared activity's three channels.
+ *
+ * @since 0.4.0
+ * @category models
+ */
+export interface TypedActivityCodecs<A extends AnyTypedActivity> {
+  readonly payload: WireValueCodec<PayloadOf<A>>;
+  readonly success: WireValueCodec<SuccessOf<A>>;
+  readonly error: WireValueCodec<ErrorOf<A>>;
+}
+
+/**
+ * Build the wire codecs for a declared activity's payload, success, and
+ * error channels from the declaration's own schemas — the shared encoding
+ * used by the workflow-side call, `implementActivities` on the worker side,
+ * and the in-memory test runtime.
+ *
+ * @since 0.4.0
+ * @category codecs
+ */
+// SAFETY: each codec is built from the declaration's own schema, so the
+// schema's Type is exactly what PayloadOf/SuccessOf/ErrorOf extract; the
+// casts only restore what the type-erased `AnyTypedActivity` bound loses.
+export const codecsFor = <A extends AnyTypedActivity>(activity: A): TypedActivityCodecs<A> => ({
+  payload: wireValueCodec(activity.payloadSchema) as WireValueCodec<PayloadOf<A>>,
+  success: wireValueCodec(activity.successSchema) as WireValueCodec<SuccessOf<A>>,
+  error: wireValueCodec(activity.errorSchema) as WireValueCodec<ErrorOf<A>>,
+});

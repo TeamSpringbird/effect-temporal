@@ -24,7 +24,6 @@ import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import * as Workflow from "effect/unstable/workflow/Workflow";
 import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
 import {
@@ -44,15 +43,20 @@ import {
   encodeDeferredExit,
   wireCodecsFor,
 } from "./wire.js";
-import { MAILBOX_SIGNAL, mailboxCodec, type DurableMailbox } from "./mailbox.js";
+import { MAILBOX_SIGNAL, mailboxCodec } from "./mailbox.js";
 import { classifyThrown } from "./thrown.js";
-import { STATE_CELL_QUERY, stateCellCodec, type StateCell } from "./state-cell.js";
+import { STATE_CELL_QUERY, stateCellCodec } from "./state-cell.js";
+import { updateCodec, WORKFLOW_UPDATE, type WorkflowUpdatePayload } from "./update.js";
 import {
-  updateCodec,
-  WORKFLOW_UPDATE,
-  type DurableUpdate,
-  type WorkflowUpdatePayload,
-} from "./update.js";
+  toDeferred,
+  toMailbox,
+  toStateCell,
+  toUpdate,
+  type DeferredLike,
+  type MailboxLike,
+  type StateCellLike,
+  type UpdateLike,
+} from "./definition.js";
 
 /**
  * What the client engine is configured with: the Temporal client and the
@@ -275,19 +279,21 @@ export const createWorkflowSchedule = <
 /**
  * Offer a message to a running workflow's mailbox. Offering to a closed or
  * unknown execution is a no-op — the workflow finishing first is a normal
- * race, matching `DurableDeferred.done`.
+ * race, matching `DurableDeferred.done`. Accepts the declaration
+ * (`Priority`) or its underlying primitive (`Priority.mailbox`).
  *
  * @since 0.1.0
  * @category client
  */
 export const offerMailbox = <S extends Schema.Top>(
-  mailbox: DurableMailbox<S>,
+  mailboxLike: MailboxLike<S>,
   options: {
     readonly client: Client;
     readonly workflowId: string;
     readonly payload: S["Type"];
   },
 ): Effect.Effect<void> => {
+  const mailbox = toMailbox(mailboxLike);
   const wire = mailboxCodec(mailbox).encode(options.payload);
   return Effect.promise(async () => {
     try {
@@ -305,19 +311,21 @@ export const offerMailbox = <S extends Schema.Top>(
  * Send an update request to a running workflow and receive its typed
  * response: the workflow's `respond` exit lands in this effect's
  * success/error channels. Unlike mailbox offers, an update expects an
- * answer, so an unknown execution is a defect rather than a no-op.
+ * answer, so an unknown execution is a defect rather than a no-op. Accepts
+ * the declaration (`SetAmount`) or its underlying primitive.
  *
  * @since 0.1.0
  * @category client
  */
 export const executeUpdate = <P extends Schema.Top, S extends Schema.Top, E extends Schema.Top>(
-  update: DurableUpdate<P, S, E>,
+  updateLike: UpdateLike<P, S, E>,
   options: {
     readonly client: Client;
     readonly workflowId: string;
     readonly payload: P["Type"];
   },
 ): Effect.Effect<S["Type"], E["Type"]> => {
+  const update = toUpdate(updateLike);
   const codecs = updateCodec(update);
   const wire = codecs.encodePayload(options.payload);
   return Effect.flatMap(
@@ -355,19 +363,21 @@ export const executeUpdate = <P extends Schema.Top, S extends Schema.Top, E exte
 /**
  * Read the latest snapshot a workflow published to `cell`: `None` while the
  * execution is unknown or the cell unpublished, `Some(typed value)`
- * otherwise — including after the run has closed.
+ * otherwise — including after the run has closed. Accepts the declaration
+ * (`Status`) or its underlying primitive.
  *
  * @since 0.1.0
  * @category client
  */
 export const readStateCell = <S extends Schema.Top>(
-  cell: StateCell<S>,
+  cellLike: StateCellLike<S>,
   options: {
     readonly client: Client;
     readonly workflowId: string;
   },
-): Effect.Effect<Option.Option<S["Type"]>> =>
-  Effect.promise(async () => {
+): Effect.Effect<Option.Option<S["Type"]>> => {
+  const cell = toStateCell(cellLike);
+  return Effect.promise(async () => {
     let wire: unknown;
     try {
       wire = await options.client.workflow
@@ -380,23 +390,26 @@ export const readStateCell = <S extends Schema.Top>(
     if (wire === null || wire === undefined) return Option.none();
     return Option.some(stateCellCodec(cell).decode(wire));
   });
+};
 
 /**
  * Read a deferred's current state from outside the workflow: `None` while
  * the execution is unknown or the deferred unresolved, `Some(typed exit)`
  * once completed. Backed by a Temporal query, so it never perturbs the
- * signal path.
+ * signal path. Accepts the declaration (`Approval`) or its underlying
+ * primitive.
  *
  * @since 0.1.0
  * @category client
  */
 export const deferredState = <Success extends Schema.Constraint, Error extends Schema.Constraint>(
-  deferred: DurableDeferred.DurableDeferred<Success, Error>,
+  deferredLike: DeferredLike<Success, Error>,
   options: {
     readonly client: Client;
     readonly workflowId: string;
   },
 ): Effect.Effect<Option.Option<Exit.Exit<Success["Type"], Error["Type"]>>> => {
+  const deferred = toDeferred(deferredLike);
   const decodeExit = Schema.decodeSync(asJsonCodec(deferred.exitSchema));
   return Effect.promise(async () => {
     const handle = options.client.workflow.getHandle(options.workflowId);
@@ -415,6 +428,42 @@ export const deferredState = <Success extends Schema.Constraint, Error extends S
     return Option.some(
       decodeExit(decodeDeferredExit(wire)) as Exit.Exit<Success["Type"], Error["Type"]>,
     );
+  });
+};
+
+/**
+ * Complete a workflow's deferred from outside, addressed by workflow id:
+ * the client-side twin of the handler's `Approval.await`, taking the
+ * declaration (`Approval`) or its underlying primitive. Rides the same
+ * done-signal `DurableDeferred.done` uses, encoded through the deferred's
+ * own schemas — no token construction, no `WorkflowEngine` in context.
+ * Completing a closed or unknown execution is a no-op (a normal race).
+ *
+ * @since 0.4.0
+ * @category client
+ */
+export const completeDeferred = <Success extends Schema.Constraint, Error extends Schema.Constraint>(
+  deferredLike: DeferredLike<Success, Error>,
+  options: {
+    readonly client: Client;
+    readonly workflowId: string;
+    readonly exit: Exit.Exit<Success["Type"], Error["Type"]>;
+  },
+): Effect.Effect<void> => {
+  const deferred = toDeferred(deferredLike);
+  // The leaves first (the deferred's own exit schema — what makeUnsafe's
+  // `deferredDone` produces), then the structure (the signal crossing).
+  const leaves = Schema.encodeSync(asJsonCodec(deferred.exitSchema))(options.exit);
+  const wire = encodeDeferredExit(leaves as Exit.Exit<unknown, unknown>);
+  return Effect.promise(async () => {
+    try {
+      await options.client.workflow.getHandle(options.workflowId).signal(DEFERRED_DONE_SIGNAL, {
+        deferredName: deferred.name,
+        exit: wire,
+      });
+    } catch (error) {
+      if (!(error instanceof WorkflowNotFoundError)) throw error;
+    }
   });
 };
 

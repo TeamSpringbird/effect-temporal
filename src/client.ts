@@ -25,7 +25,6 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
-import type * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import type * as Workflow from "effect/unstable/workflow/Workflow";
 import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
 import {
@@ -35,6 +34,7 @@ import {
   type ScheduleSpec,
 } from "@temporalio/client";
 import {
+  completeDeferred,
   createWorkflowSchedule,
   deferredState,
   executeUpdate,
@@ -43,10 +43,8 @@ import {
   readStateCell,
   ScheduleAlreadyExistsError,
 } from "./engine-client.js";
-import type { DurableMailbox } from "./mailbox.js";
-import type { StateCell } from "./state-cell.js";
+import type { DeferredLike, MailboxLike, StateCellLike, UpdateLike } from "./definition.js";
 import { classifyThrown } from "./thrown.js";
-import type { DurableUpdate } from "./update.js";
 import { wireCodecsFor } from "./wire.js";
 
 export {
@@ -155,31 +153,43 @@ export interface WorkflowClientShape {
     workflowId: string,
     options?: { readonly reason?: string; readonly deadlineMillis?: number },
   ) => Effect.Effect<void>;
-  /** Offer to a running workflow's mailbox; closed/unknown is a no-op. */
+  /** Offer to a running workflow's mailbox; closed/unknown is a no-op.
+   * Takes the declaration (`Priority`) or its underlying primitive. */
   readonly offerMailbox: <S extends Schema.Top>(
-    mailbox: DurableMailbox<S>,
+    mailbox: MailboxLike<S>,
     workflowId: string,
     payload: S["Type"],
   ) => Effect.Effect<void>;
   /** Send an update request and receive the workflow's typed response;
-   * unknown executions and runs that end unanswered are defects. */
+   * unknown executions and runs that end unanswered are defects. Takes the
+   * declaration (`SetAmount`) or its underlying primitive. */
   readonly executeUpdate: <P extends Schema.Top, S extends Schema.Top, E extends Schema.Top>(
-    update: DurableUpdate<P, S, E>,
+    update: UpdateLike<P, S, E>,
     workflowId: string,
     payload: P["Type"],
   ) => Effect.Effect<S["Type"], E["Type"]>;
   /** Read the latest published snapshot of a state cell — `None` while the
-   * execution is unknown or the cell unpublished, including after close. */
+   * execution is unknown or the cell unpublished, including after close.
+   * Takes the declaration (`Status`) or its underlying primitive. */
   readonly readStateCell: <S extends Schema.Top>(
-    cell: StateCell<S>,
+    cell: StateCellLike<S>,
     workflowId: string,
   ) => Effect.Effect<Option.Option<S["Type"]>>;
   /** Read a deferred's state via query — `None` while pending or unknown,
-   * `Some(typed exit)` once completed; never perturbs the signal path. */
+   * `Some(typed exit)` once completed; never perturbs the signal path.
+   * Takes the declaration (`Approval`) or its underlying primitive. */
   readonly deferredState: <Success extends Schema.Constraint, Error extends Schema.Constraint>(
-    deferred: DurableDeferred.DurableDeferred<Success, Error>,
+    deferred: DeferredLike<Success, Error>,
     workflowId: string,
   ) => Effect.Effect<Option.Option<Exit.Exit<Success["Type"], Error["Type"]>>>;
+  /** Complete a workflow's deferred by workflow id — the client half of
+   * `Approval.await`. Closed/unknown executions are a no-op. Takes the
+   * declaration or its underlying primitive. @since 0.4.0 */
+  readonly completeDeferred: <Success extends Schema.Constraint, Error extends Schema.Constraint>(
+    deferred: DeferredLike<Success, Error>,
+    workflowId: string,
+    exit: Exit.Exit<Success["Type"], Error["Type"]>,
+  ) => Effect.Effect<void>;
   /** Create a Temporal schedule firing the workflow with a fixed payload;
    * an existing schedule under the id fails typed. */
   readonly createSchedule: <
@@ -460,6 +470,9 @@ export const makeWorkflowClient = (config: WorkflowClientConfig): WorkflowClient
 
     deferredState: (deferred, workflowId) =>
       deferredState(deferred, { client: config.client, workflowId }),
+
+    completeDeferred: (deferred, workflowId, exit) =>
+      completeDeferred(deferred, { client: config.client, workflowId, exit }),
 
     createSchedule: (options) =>
       createWorkflowSchedule({
