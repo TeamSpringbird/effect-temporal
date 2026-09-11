@@ -45,9 +45,9 @@ import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
 import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
 import type * as Workflow from "effect/unstable/workflow/Workflow";
-import * as DurableMailbox from "./mailbox.js";
-import * as DurableUpdate from "./update.js";
-import * as StateCell from "./state-cell.js";
+import type * as DurableMailbox from "./mailbox.js";
+import type * as DurableUpdate from "./update.js";
+import type * as StateCell from "./state-cell.js";
 
 // ─── Activity declarations (the types) ───────────────────────────────────────
 
@@ -133,13 +133,8 @@ export type SuccessOf<A> =
 export type ErrorOf<A> =
   A extends TypedActivity<string, Schema.Top, Schema.Top, infer E> ? E["Type"] : never;
 
-/**
- * Build the serializable projection of an activity declaration. Shared by
- * `defineActivity` and the deprecated `TypedActivity.make`.
- *
- * @internal
- */
-export const makeTypedActivity = <
+/** Build the serializable projection of an activity declaration. */
+const makeTypedActivity = <
   const Name extends string,
   Payload extends Schema.Struct.Fields | Schema.Top,
   Success extends Schema.Top = Schema.Void,
@@ -410,7 +405,7 @@ export const defineMailbox = <Payload extends Schema.Top>(
   name: string,
   decl: { readonly payload: Payload },
 ): DefinedMailbox<Payload> => {
-  const mailbox = DurableMailbox.make(name, { payload: decl.payload });
+  const mailbox: DurableMailbox.DurableMailbox<Payload> = { name, payloadSchema: decl.payload };
   return {
     name,
     mailbox,
@@ -465,7 +460,12 @@ export const defineUpdate = <
   name: string,
   decl: { readonly payload: Payload; readonly success: Success; readonly error: Error },
 ): DefinedUpdate<Payload, Success, Error> => {
-  const update = DurableUpdate.make(name, decl);
+  const update: DurableUpdate.DurableUpdate<Payload, Success, Error> = {
+    name,
+    payloadSchema: decl.payload,
+    successSchema: decl.success,
+    errorSchema: decl.error,
+  };
   return {
     name,
     update,
@@ -502,7 +502,7 @@ export const defineState = <Value extends Schema.Top>(
   name: string,
   decl: { readonly value: Value },
 ): DefinedState<Value> => {
-  const cell = StateCell.make(name, { value: decl.value });
+  const cell: StateCell.StateCell<Value> = { name, valueSchema: decl.value };
   return {
     name,
     cell,

@@ -1,6 +1,6 @@
 {
   "name": "@springbird/effect-temporal",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Run `effect/unstable/workflow` programs (Workflow / Activity / DurableClock / DurableDeferred) on a Temporal engine, plus durable mailboxes, updates, queryable state, versioning, schedules, and Nexus operations.",
   "license": "MIT",
   "type": "module",
@@ -43,34 +43,14 @@
       "default": "./dist/engine-sandbox.js"
     },
     "./lint": "./dist/lint.js",
-    "./mailbox": {
-      "types": "./dist/mailbox.d.ts",
-      "default": "./dist/mailbox.js"
-    },
     "./nexus": {
       "types": "./dist/nexus.d.ts",
       "default": "./dist/nexus.js"
     },
     "./oxlint-presets/*.json": "./oxlint-presets/*.json",
-    "./state-cell": {
-      "types": "./dist/state-cell.d.ts",
-      "default": "./dist/state-cell.js"
-    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"
-    },
-    "./typed-activity": {
-      "types": "./dist/typed-activity.d.ts",
-      "default": "./dist/typed-activity.js"
-    },
-    "./update": {
-      "types": "./dist/update.d.ts",
-      "default": "./dist/update.js"
-    },
-    "./versioning": {
-      "types": "./dist/versioning.d.ts",
-      "default": "./dist/versioning.js"
     },
     "./wire": {
       "types": "./dist/wire.d.ts",

@@ -54,29 +54,30 @@ export const fine = pickVersion("site", ["v1", "v2"]);
 export const fineTable = versioned("site", { v1: Effect.succeed(1), v2: Effect.succeed(2) });
 `;
 
-// The deprecated authoring surface, every shape the rule must catch: named
-// imports of deprecated engine-sandbox ops, the typed-activity and
-// versioning modules (named and namespace), and the primitive constructors.
+// The removed (0.5.0) authoring surface, every shape the rule must catch:
+// named imports of the old engine-sandbox ops, the typed-activity and
+// versioning modules (named and namespace), the primitive constructors —
+// and `workflowBundle` from `engine-sandbox`, whose home is `bundle`.
 const DEPRECATED_IMPORTS = `
-import { callActivity, takeMailbox, sleepUntil, type UpdateRequest } from "@springbird/effect-temporal/engine-sandbox";
+import { callActivity, takeMailbox, sleepUntil, workflowBundle, type UpdateRequest } from "@springbird/effect-temporal/engine-sandbox";
 import * as TypedActivity from "@springbird/effect-temporal/typed-activity";
 import { codecsFor, make as makeActivity } from "@springbird/effect-temporal/typed-activity";
 import * as Versioning from "@springbird/effect-temporal/versioning";
 import { make as makeMailbox, MAILBOX_SIGNAL } from "@springbird/effect-temporal/mailbox";
 import { make as makeUpdate } from "@springbird/effect-temporal/update";
 import { make as makeCell } from "../state-cell.js";
-export const all = [callActivity, takeMailbox, sleepUntil, TypedActivity, codecsFor, makeActivity, Versioning, makeMailbox, MAILBOX_SIGNAL, makeUpdate, makeCell];
+export const all = [callActivity, takeMailbox, sleepUntil, workflowBundle, TypedActivity, codecsFor, makeActivity, Versioning, makeMailbox, MAILBOX_SIGNAL, makeUpdate, makeCell];
 export type R = UpdateRequest<never, never, never>;
 `;
 
-// The 0.4.0 authoring surface — nothing here may be reported.
+// The current authoring surface — nothing here may be reported.
 const MODERN = `
 import { workflowBundle } from "@springbird/effect-temporal/bundle";
-import { callRawActivity, workflowBundle as legacyBundleImport } from "@springbird/effect-temporal/engine-sandbox";
+import { callRawActivity, offerMailbox } from "@springbird/effect-temporal/engine-sandbox";
 import { defineActivity, sleep, continueAsNew, executeChild, versioned, type PayloadOf } from "@springbird/effect-temporal/definition";
 import { codecsFor, ACTIVITY_EXIT_TYPE } from "@springbird/effect-temporal/wire";
 import { MAILBOX_SIGNAL } from "some-other-lib/mailbox";
-export const all = [workflowBundle, callRawActivity, legacyBundleImport, defineActivity, sleep, continueAsNew, executeChild, versioned, codecsFor, ACTIVITY_EXIT_TYPE, MAILBOX_SIGNAL];
+export const all = [workflowBundle, callRawActivity, offerMailbox, defineActivity, sleep, continueAsNew, executeChild, versioned, codecsFor, ACTIVITY_EXIT_TYPE, MAILBOX_SIGNAL];
 export type P = PayloadOf<never>;
 `;
 
@@ -122,7 +123,7 @@ describe("lint plugin", { concurrent: false }, () => {
     expect(definitionOutput.match(/effect-temporal\(/g)).toHaveLength(2);
   }, 60_000);
 
-  it("prefer-definition reports every deprecated import with its replacement, and nothing modern", () => {
+  it("prefer-definition reports every removed import with its replacement, and nothing modern", () => {
     const directory = mkdtempSync(join(tmpdir(), "effect-workflow-lint-"));
     const deprecated = join(directory, "deprecated.ts");
     const modern = join(directory, "modern.ts");
@@ -131,10 +132,11 @@ describe("lint plugin", { concurrent: false }, () => {
 
     const output = runOxlint(directory, [deprecated]);
     const findings = output.match(/effect-temporal\(prefer-definition\)/g) ?? [];
-    // callActivity, takeMailbox, sleepUntil, UpdateRequest, * as
-    // TypedActivity, codecsFor, make (typed-activity), * as Versioning,
-    // make (mailbox), MAILBOX_SIGNAL, make (update), make (state-cell)
-    expect(findings).toHaveLength(12);
+    // callActivity, takeMailbox, sleepUntil, workflowBundle (→ bundle),
+    // UpdateRequest, * as TypedActivity, codecsFor, make (typed-activity),
+    // * as Versioning, make (mailbox), MAILBOX_SIGNAL, make (update),
+    // make (state-cell)
+    expect(findings).toHaveLength(13);
     for (const replacement of [
       "call the declared activity directly",
       "`defineActivity` from `definition`",

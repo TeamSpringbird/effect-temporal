@@ -56,8 +56,8 @@ And the operations that need no declaration — all from the same module, all re
 
 **The declaration is the only symbol you ever name.** Every client-side surface — the `WorkflowClient` service, the standalone `engine-client` operations, the [in-memory test world](/guide/testing#the-in-memory-runtime), the fake client, the live harness — takes the declaration directly. Each declaration still carries its underlying primitive (`Approval.deferred`, `Priority.mailbox`, `SetAmount.update`, `Status.cell`; a defined activity *is* its `TypedActivity` projection) for engine-level code, and every surface accepts that too. The decoded types are named with `PayloadOf<typeof Charge>`, `SuccessOf<…>`, `ErrorOf<…>` from this module.
 
-::: warning Deprecated authoring surface
-The pre-0.3.0 modules — `/typed-activity`, `/versioning`, the `make` constructors of `/mailbox`, `/update`, `/state-cell`, and the per-primitive calls in `/engine-sandbox` (`callActivity`, `takeMailbox`, `takeUpdate`, `setStateCell`, `sleepUntil`, `continueAsNew`) — are **deprecated in 0.4.0 and removed in 0.5.0**. Each has a replacement here; the [`prefer-definition` lint rule](/guide/lint-rules) names it at every remaining import.
+::: info Coming from 0.3.x or earlier
+The pre-0.4.0 modules — `/typed-activity`, `/versioning`, the `make` constructors of `/mailbox`, `/update`, `/state-cell`, and the per-primitive calls in `/engine-sandbox` (`callActivity`, `takeMailbox`, `takeUpdate`, `setStateCell`, `sleepUntil`, `continueAsNew`) — were deprecated in 0.4.0 and **removed in 0.5.0**. Each has a replacement in the tables above; the [`prefer-definition` lint rule](/guide/lint-rules) names it at every stale import, so migrating is running the linter.
 :::
 
 ::: info Schemas must be context-free

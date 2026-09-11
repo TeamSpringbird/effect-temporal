@@ -30,14 +30,10 @@ import {
 } from "../engine-client.js";
 import {
   callRawActivity,
-  continueAsNew,
   offerMailbox as offerMailboxFromWorkflow,
-  setStateCell,
-  takeMailbox,
-  takeUpdate,
   type SandboxRun,
 } from "../engine-sandbox.js";
-import * as Versioning from "../versioning.js";
+import { continueAsNew, version, versioned, type WorkflowOps } from "../definition.js";
 import { ChildDemo } from "./fixtures/child-demo.js";
 import { Demo } from "./fixtures/demo.js";
 import { LoopDemo } from "./fixtures/loop-demo.js";
@@ -99,14 +95,16 @@ const _activities = () => {
 
 const _mailboxes = () => {
   const { client } = clientOptions;
-  const taken = takeMailbox(StateUpdates.mailbox);
+  const taken = StateUpdates.take;
   expectTypeOf<Effect.Success<typeof taken>>().toEqualTypeOf<StateUpdate>();
-  expectTypeOf<Effect.Services<typeof taken>>().toEqualTypeOf<SandboxRun>();
+  expectTypeOf<Effect.Services<typeof taken>>().toEqualTypeOf<WorkflowOps>();
 
   return [
     taken,
+    // The declaration and its primitive are both accepted client-side.
+    offerMailbox(StateUpdates, { client, workflowId: "id", payload: { op: "finish" } }),
     offerMailbox(StateUpdates.mailbox, { client, workflowId: "id", payload: { op: "finish" } }),
-    offerMailboxFromWorkflow(StateUpdates.mailbox, { workflowId: "id", payload: { op: "finish" } }),
+    offerMailboxFromWorkflow(StateUpdates, { workflowId: "id", payload: { op: "finish" } }),
     // @ts-expect-error unknown mailbox op
     offerMailbox(StateUpdates.mailbox, { client, workflowId: "id", payload: { op: "reset" } }),
     // @ts-expect-error a set requires key and value
@@ -125,9 +123,10 @@ const _stateCells = () => {
 
   return [
     read,
-    setStateCell(StateSnapshot.cell, { a: 1 }),
+    readStateCell(StateSnapshot, { client: clientOptions.client, workflowId: "id" }),
+    StateSnapshot.set({ a: 1 }),
     // @ts-expect-error cell values are numbers
-    setStateCell(StateSnapshot.cell, { a: "one" }),
+    StateSnapshot.set({ a: "one" }),
   ];
 };
 
@@ -145,8 +144,8 @@ const _updates = () => {
     // @ts-expect-error payload must match the update's schema
     executeUpdate(SetLanguage.update, { client, workflowId: "id", payload: { lang: "x" } });
 
-  const taken = takeUpdate(SetLanguage.update);
-  expectTypeOf<Effect.Services<typeof taken>>().toEqualTypeOf<SandboxRun>();
+  const taken = SetLanguage.take;
+  expectTypeOf<Effect.Services<typeof taken>>().toEqualTypeOf<WorkflowOps>();
   const served = Effect.andThen(taken, (request) => {
     expectTypeOf(request.payload).toEqualTypeOf<{ readonly language: string }>();
     expectTypeOf(request.respond).parameter(0).toEqualTypeOf<Exit.Exit<string, string>>();
@@ -182,33 +181,31 @@ const _deferreds = () => {
 };
 
 const _versioning = () => {
-  const selected = Versioning.version("site", ["v1", "v2", "v3"]);
+  const selected = version("site", ["v1", "v2", "v3"]);
   expectTypeOf<Effect.Success<typeof selected>>().toEqualTypeOf<"v1" | "v2" | "v3">();
 
-  const matched = Versioning.match("site", [
-    { version: "v1", run: Effect.succeed(1) },
-    { version: "v2", run: Effect.fail("legacy-error") },
-    { version: "v3", run: Effect.succeed("three") },
-  ]);
+  const matched = versioned("site", {
+    v1: Effect.succeed(1),
+    v2: Effect.fail("legacy-error"),
+    v3: Effect.succeed("three"),
+  });
   expectTypeOf<Effect.Success<typeof matched>>().toEqualTypeOf<number | string>();
   expectTypeOf<Effect.Error<typeof matched>>().toEqualTypeOf<string>();
 
   // Heterogeneous cases reduce with full fidelity: distinct result shapes
   // union, an always-failing case contributes `never` to the success union,
-  // and a case requiring services carries its requirement into the union.
-  const heterogeneous = Versioning.match("pricing", [
-    { version: "v1", run: Effect.succeed({ kind: "flat" as const, cents: 100 }) },
-    { version: "v2", run: Effect.fail({ kind: "quote-required" as const }) },
-    {
-      version: "v3",
-      run: callRawActivity(() => Promise.resolve({ kind: "dynamic" as const, quote: "q" })),
-    },
-  ]);
+  // and a case requiring services carries its requirement into the union
+  // (alongside the seam every case dispatches through).
+  const heterogeneous = versioned("pricing", {
+    v1: Effect.succeed({ kind: "flat" as const, cents: 100 }),
+    v2: Effect.fail({ kind: "quote-required" as const }),
+    v3: callRawActivity(() => Promise.resolve({ kind: "dynamic" as const, quote: "q" })),
+  });
   expectTypeOf<Effect.Success<typeof heterogeneous>>().toEqualTypeOf<
     { kind: "flat"; cents: number } | { kind: "dynamic"; quote: string }
   >();
   expectTypeOf<Effect.Error<typeof heterogeneous>>().toEqualTypeOf<{ kind: "quote-required" }>();
-  expectTypeOf<Effect.Services<typeof heterogeneous>>().toEqualTypeOf<SandboxRun>();
+  expectTypeOf<Effect.Services<typeof heterogeneous>>().toEqualTypeOf<SandboxRun | WorkflowOps>();
 
   // The selected literal narrows through ordinary control flow.
   const narrowed = Effect.map(selected, (name) => {

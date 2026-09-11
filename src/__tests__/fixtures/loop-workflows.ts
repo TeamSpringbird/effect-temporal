@@ -5,8 +5,9 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Activity from "effect/unstable/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
-import { callRawActivity, continueAsNew } from "../../engine-sandbox.js";
+import { callRawActivity } from "../../engine-sandbox.js";
 import { workflowBundle } from "../../bundle.js";
+import { continueAsNew } from "../../definition.js";
 import { CellLoopDemo, LoopDemo, LoopGate, LoopStage } from "./loop-demo.js";
 
 const acts = proxyActivities<{ record(iteration: string): Promise<string> }>({

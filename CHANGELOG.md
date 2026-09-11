@@ -9,35 +9,46 @@ interfaces from `effect/unstable/*`, whose API can move between releases. Each r
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
 
-## Unreleased / planned — 0.5.0
+## 0.5.0 (2026-09-10)
 
-The removal PR is this checklist. Everything below was deprecated in 0.4.0
-with its replacement named in the JSDoc and reported by the
-`prefer-definition` lint rule; nothing else changes.
+The deletion release: everything deprecated in 0.4.0 is gone, and the API
+converges on `definition` + `bundle` + `activities` + `client` /
+`engine-client` + `testing` (+ `wire` and the engine-level corners of
+`engine-sandbox`). No wire change — see the replay drill below.
 
-- REMOVE the `typed-activity` module and its package export
-  (`TypedActivity.make` → `defineActivity`; `PayloadOf`/`SuccessOf`/`ErrorOf`/
-  `AnyTypedActivity`/`TypedActivity`/`TypedActivityOptions`/
-  `DEFAULT_ACTIVITY_OPTIONS` → `definition`; `codecsFor`/`ACTIVITY_EXIT_TYPE`/
-  `TypedActivityCodecs` → `wire`).
-- REMOVE the `versioning` module and its package export (`match` → `versioned`,
-  `version` → `version` from `definition`). Move `deprecateVersion` /
-  `deprecatePatch` / `patched` (the Temporal-only retirement step) to `bundle`.
-- REMOVE from `engine-sandbox`: `callActivity`, `takeMailbox`, `pollMailbox`,
-  `takeUpdate`, `setStateCell`, `sleepUntil`, `continueAsNew`, and the
-  `UpdateRequest<S, E, P>` alias. The Temporal `WorkflowOps` runtime keeps
-  their bodies as private functions. `callRawActivity`, `offerMailbox`
-  (workflow → workflow), `callNexusWorkflowOperation`, `SandboxRun`, and
-  `workflowBundle` stay.
-- REMOVE `make` from `mailbox`, `update`, `state-cell` (→ `defineMailbox`,
-  `defineUpdate`, `defineState`) and drop those three package exports — the
-  modules become internal wire homes (`MAILBOX_SIGNAL`, `WORKFLOW_UPDATE`,
-  `STATE_CELL_QUERY`, codecs) consumed by the engine halves and `testing`.
-- DELETE the deprecation entries from `prefer-definition` once the symbols are
-  gone (the rule stays, empty tables are fine, so a future deprecation has a
-  home).
-- KEEP `histories/definition-order-0.3.0` in the replay drill; record a
-  0.4.0 history alongside it.
+- BREAKING: REMOVED the `typed-activity` module and its package export.
+  `TypedActivity.make` → `defineActivity`; the type helpers → `definition`;
+  `codecsFor` / `ACTIVITY_EXIT_TYPE` / `TypedActivityCodecs` → `wire`.
+- BREAKING: REMOVED the `versioning` module and its package export.
+  `match` → `versioned`, `version` → `version` (both `definition`). The
+  Temporal-only retirement step moved to `bundle`: `deprecateVersion`,
+  `deprecatePatch`, `patched`.
+- BREAKING: REMOVED from `engine-sandbox`: `callActivity`, `takeMailbox`,
+  `pollMailbox`, `takeUpdate`, `setStateCell`, `sleepUntil`,
+  `continueAsNew`, and the `UpdateRequest<S, E, P>` alias. Their bodies are
+  now module-private machinery behind the Temporal `WorkflowOps` runtime.
+  `workflowBundle` (import it from `bundle`), `callRawActivity`,
+  `offerMailbox` (workflow → workflow), `callNexusWorkflowOperation`, and
+  `SandboxRun` remain.
+- BREAKING: REMOVED the `mailbox`, `update`, and `state-cell` package exports
+  and their `make` constructors (→ `defineMailbox`, `defineUpdate`,
+  `defineState`). The modules stay in the source tree as internal wire homes
+  (`MAILBOX_SIGNAL`, `WORKFLOW_UPDATE`, `STATE_CELL_QUERY`, codecs) for the
+  engine halves and `testing`.
+- `prefer-definition` keeps its tables (message now "was removed in 0.5.0 —
+  use …"), so a stale import gets a pointer instead of a bare module-not-found;
+  it also reports `workflowBundle` imported from `engine-sandbox` (→ `bundle`).
+  The 0.4.0 plan said to empty the tables; keeping them is strictly more useful.
+- Replay drill: `replay-compat.test.ts` now also replays two histories
+  recorded on 0.4.0 — `defDispatch` (`versioned` marker + awaited
+  `executeChild`) and `defGrace` (durable timer racing a mailbox take) —
+  alongside the 0.3.0 `defOrder` history. The version-chain fixtures
+  (generations 2 and 3) author with `versioned`; generation 1 stays
+  pre-versioning code, so the drill still proves adoption is replay-safe.
+- The repository has no remaining import of a removed symbol; the examples
+  and every fixture author against the current surface.
+
+Built and tested against `effect@4.0.0-rc.112` and `@temporalio/*@1.19.0`.
 
 ## 0.4.0 (2026-09-10)
 

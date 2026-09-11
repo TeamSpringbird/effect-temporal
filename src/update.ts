@@ -1,12 +1,13 @@
 /**
  * Request/response into a running workflow — Temporal updates with typed
  * channels: the caller gets the handler's typed success or typed failure
- * back, unlike a fire-and-forget mailbox message. This module holds the
- * shared wire contract (update name, definition shape, codec) the engine
- * halves consume. Applications declare updates with `defineUpdate` from the
+ * back, unlike a fire-and-forget mailbox message.
+ *
+ * **Internal.** This module holds the shared wire contract (update name,
+ * definition shape, codec) the engine halves consume. It has no package
+ * export: applications declare updates with `defineUpdate` from the
  * `definition` module (`.take` in the handler, `wf.executeUpdate` from
- * clients) and never import this one; the `make` constructor here is
- * deprecated.
+ * clients).
  *
  * The response always travels as a wire-encoded Exit in the update RESULT
  * (the update itself never fails), so typed failures round-trip without a
@@ -53,24 +54,6 @@ export interface DurableUpdate<P extends Schema.Top, S extends Schema.Top, E ext
   readonly errorSchema: E;
 }
 
-/**
- * Declare an update primitive (name + payload/success/error schemas).
- *
- * @deprecated Use `defineUpdate` from `definition` — its `.take` runs on any
- * engine and every client-side request accepts the declaration directly.
- * Removed in 0.5.0.
- * @since 0.1.0
- * @category constructors
- */
-export const make = <P extends Schema.Top, S extends Schema.Top, E extends Schema.Top>(
-  name: string,
-  options: { readonly payload: P; readonly success: S; readonly error: E },
-): DurableUpdate<P, S, E> => ({
-  name,
-  payloadSchema: options.payload,
-  successSchema: options.success,
-  errorSchema: options.error,
-});
 
 /**
  * The encode/decode pairs for an update's two crossings: the request

@@ -1,9 +1,10 @@
-// `Versioning.match` across three generations of the same workflow,
+// `versioned` across three generations of the same workflow,
 // mirroring the Temporal `patching-api` sample (see EXAMPLES.md): every
 // older generation's history must replay clean through every newer bundle
 // (taking its own version's branch), fresh runs must take the newest
 // version, and the unguarded control must fail replay — proving the drill
-// can see the change at all.
+// can see the change at all. Generation 1 is pre-versioning code; adopting
+// `versioned` on it (generation 2) must be replay-safe.
 
 import { fileURLToPath } from "node:url";
 import * as Effect from "effect/Effect";
@@ -61,7 +62,7 @@ describe("version chains", { concurrent: false }, () => {
     expect(generation1.result).toBe("greeted:hello-v1");
 
     // Its history replays through both versioned bundles (v1 branch) —
-    // adopting `Versioning.match` on an existing workflow is safe.
+    // adopting `versioned` on an existing workflow is safe.
     await replay("v2", generation1.history);
     await replay("v3", generation1.history);
 

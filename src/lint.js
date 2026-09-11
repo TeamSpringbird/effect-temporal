@@ -31,11 +31,13 @@ const moduleOf = (source) => {
   return match?.[1];
 };
 
-/** The deprecated authoring surface (removed in 0.5.0) and what replaces
- * each symbol. `*` covers the module's namespace import and any named
- * import not listed individually. */
+/** The pre-0.4.0 authoring surface — deprecated in 0.4.0, REMOVED in 0.5.0
+ * — and what replaces each symbol, so a stale import gets a pointer instead
+ * of a bare "module not found". `*` covers the module's namespace import
+ * and any named import not listed individually. */
 const DEPRECATED = {
   "engine-sandbox": {
+    workflowBundle: "`workflowBundle` from `bundle`",
     callActivity: "call the declared activity directly (`yield* Charge(payload)`, from `defineActivity` in `definition`)",
     takeMailbox: "the declaration's `.take` (`defineMailbox` in `definition`)",
     pollMailbox: "the declaration's `.poll` (`defineMailbox` in `definition`)",
@@ -283,13 +285,13 @@ const rules = {
       type: "problem",
       docs: {
         description:
-          "Report imports of the deprecated authoring surface (engine-sandbox per-primitive " +
+          "Report imports of the pre-0.4.0 authoring surface (engine-sandbox per-primitive " +
           "calls, typed-activity, versioning, the mailbox/update/state-cell constructors) — " +
-          "each has a `definition`, `bundle`, or `wire` replacement, and the deprecated " +
-          "symbols are removed in 0.5.0.",
+          "deprecated in 0.4.0 and removed in 0.5.0; each has a `definition`, `bundle`, or " +
+          "`wire` replacement named in the message.",
       },
       messages: {
-        deprecated: "`{{name}}` from `{{module}}` is deprecated (removed in 0.5.0) — use {{replacement}}.",
+        deprecated: "`{{name}}` from `{{module}}` was removed in 0.5.0 — use {{replacement}}.",
       },
       schema: [],
     },
@@ -327,6 +329,6 @@ const rules = {
 };
 
 export default {
-  meta: { name: "effect-temporal", version: "0.4.0" },
+  meta: { name: "effect-temporal", version: "0.5.0" },
   rules,
 };
