@@ -13,12 +13,14 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { handle, implementActivities, type ActivityRunner } from "../activities.js";
 import {
   continueAsNew,
+  defineActivity,
   executeChild,
   sleepUntil,
   version,
@@ -79,6 +81,38 @@ const _types = () => {
   void _r;
   // @ts-expect-error wrong payload shape
   Charge({ orderId: 1 });
+
+  // Omitted schemas retain their runtime defaults in the type channels.
+  const Defaults = defineActivity("defaults", { payload: { id: Schema.String } });
+  const defaults = Defaults({ id: "x" });
+  expectTypeOf<Effect.Success<typeof defaults>>().toEqualTypeOf<void>();
+  expectTypeOf<Effect.Error<typeof defaults>>().toEqualTypeOf<never>();
+
+  // An error schema can still be inferred while success defaults to void.
+  const ErrorOnly = defineActivity("errorOnly", {
+    payload: { id: Schema.String },
+    error: CardDeclined,
+  });
+  const errorOnly = ErrorOnly({ id: "x" });
+  expectTypeOf<Effect.Success<typeof errorOnly>>().toEqualTypeOf<void>();
+  expectTypeOf<Effect.Error<typeof errorOnly>>().toEqualTypeOf<typeof CardDeclined.Type>();
+
+  defineActivity<"missingSuccess", { id: typeof Schema.String }, typeof Schema.String>(
+    "missingSuccess",
+    // @ts-expect-error a non-default success generic requires its runtime schema
+    { payload: { id: Schema.String } },
+  );
+
+  defineActivity<
+    "missingError",
+    { id: typeof Schema.String },
+    Schema.Void,
+    typeof CardDeclined
+  >(
+    "missingError",
+    // @ts-expect-error a non-default error generic requires its runtime schema
+    { payload: { id: Schema.String } },
+  );
 
   // Messages: deferred success, mailbox payload, update request typing.
   expectTypeOf<Effect.Success<typeof Approval.await>>().toEqualTypeOf<string>();
