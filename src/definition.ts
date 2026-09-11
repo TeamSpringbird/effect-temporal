@@ -133,6 +133,22 @@ export type SuccessOf<A> =
 export type ErrorOf<A> =
   A extends TypedActivity<string, Schema.Top, Schema.Top, infer E> ? E["Type"] : never;
 
+type IsExactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+type ActivityDeclaration<
+  Payload extends Schema.Struct.Fields | Schema.Top,
+  Success extends Schema.Top,
+  Error extends Schema.Top,
+> = {
+  readonly payload: Payload;
+  readonly options?: TypedActivityOptions;
+} & (IsExactly<Success, Schema.Void> extends true
+  ? { readonly success?: Success }
+  : { readonly success: Success })
+  & (IsExactly<Error, Schema.Never> extends true
+    ? { readonly error?: Error }
+    : { readonly error: Error });
+
 /** Build the serializable projection of an activity declaration. */
 const makeTypedActivity = <
   const Name extends string,
@@ -141,12 +157,7 @@ const makeTypedActivity = <
   Error extends Schema.Top = Schema.Never,
 >(
   name: Name,
-  definition: {
-    readonly payload: Payload;
-    readonly success?: Success;
-    readonly error?: Error;
-    readonly options?: TypedActivityOptions;
-  },
+  definition: ActivityDeclaration<Payload, Success, Error>,
 ): TypedActivity<
   Name,
   Payload extends Schema.Struct.Fields ? Schema.Struct<Payload> : Payload,
@@ -319,12 +330,7 @@ export const defineActivity = <
   Error extends Schema.Top = Schema.Never,
 >(
   name: Name,
-  decl: {
-    readonly payload: Payload;
-    readonly success?: Success;
-    readonly error?: Error;
-    readonly options?: TypedActivityOptions;
-  },
+  decl: ActivityDeclaration<Payload, Success, Error>,
 ): DefinedActivity<
   Name,
   Payload extends Schema.Struct.Fields ? Schema.Struct<Payload> : Payload,
