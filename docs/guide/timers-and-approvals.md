@@ -30,7 +30,7 @@ import { sleepUntil } from "@springbird/effect-temporal/definition";
 yield* sleepUntil({ name: "not-before", timestamp: payload.notBeforeISO });
 ```
 
-The timestamp is epoch milliseconds or a date-time string that **carries its zone** — `Z` or an explicit offset. A zone-less date-time string (or an unparseable timestamp) **dies loudly** on every engine: `Date.parse` would read it in the worker's local timezone, which is nondeterministic across workers and replays. The rule is one function, `sleepUntilTarget`, shared by the Temporal runtime and the in-memory one.
+The timestamp is epoch milliseconds, an ISO date-only string (for example, `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`, interpreted as UTC), or an ISO date-time string using `T` and ending in `Z` or an explicit offset such as `+05:30`. Zone-less date-times and unsupported string formats **die loudly** on every engine; otherwise `Date.parse` could interpret the same input in a worker's local timezone. `sleepUntilTarget` applies this rule in both the Temporal and in-memory runtimes.
 
 ::: tip Effect.sleep also works — durably
 Inside the sandbox, `Effect.sleep`, `Effect.timeout*`, and `Schedule` delays land on the sandbox's `setTimeout`, which **is** a durable Temporal timer — deterministic on replay, but each one is a history event. For waits that matter, prefer the named forms above: the name shows up in your program and your reasoning. Be deliberate about retry schedules with many short delays.
