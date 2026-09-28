@@ -10,7 +10,7 @@ move between releases. Each release
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
 
-## 0.6.0 (unreleased)
+## 0.6.0 (2026-09-28)
 
 Tracks `effect@4.0.0-rc.118`, which removes effect's `unstable` subpath namespace.
 
