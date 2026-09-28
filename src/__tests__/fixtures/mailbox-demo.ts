@@ -6,7 +6,7 @@
 //     by signals while it sleeps
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineMailbox, defineState } from "../../definition.js";
 
 export const StateUpdates = defineMailbox("state-updates", {

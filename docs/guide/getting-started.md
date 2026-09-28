@@ -9,7 +9,7 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
 `effect`, `@temporalio/client`, and `@temporalio/workflow` are peer dependencies (modern package managers install them for you). You will also want `@temporalio/worker` to run a worker and `@temporalio/testing` for the test harness — both optional peers, used only where you use them.
 
 ::: warning Effect version
-effect-temporal targets **Effect v4** and pins its `effect` peer **exactly** (currently `4.0.0-rc.112`): the engine implements interfaces from `effect/unstable/*`, whose API can move between releases. Match the pinned version; each release of this package states the one `effect` version it is built and tested against.
+effect-temporal targets **Effect v4** and pins its `effect` peer **exactly** (currently `4.0.0-rc.118`): the engine implements interfaces from `effect/workflow` (still `@stability unstable` upstream), whose API can move between releases. Match the pinned version; each release of this package states the one `effect` version it is built and tested against.
 :::
 
 A Temporal deployment has three kinds of process, and this package has a module for each:
@@ -25,7 +25,7 @@ A definition is a tag, a payload schema, an idempotency key, and success/error s
 ```ts
 // definitions.ts — shared by the bundle and every client
 import { Schema } from "effect";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineActivity } from "@springbird/effect-temporal/definition";
 
 export const Reserve = defineActivity("reserve", {

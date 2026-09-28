@@ -2,7 +2,7 @@
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
+import * as DurableClock from "effect/workflow/DurableClock";
 import { workflowBundle } from "../../bundle.js";
 import {
   DeadlineUpdates,

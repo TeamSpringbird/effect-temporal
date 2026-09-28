@@ -7,7 +7,7 @@
 // `bundle`.
 
 import { Effect } from "effect";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { workflowBundle } from "@springbird/effect-temporal/bundle";
 import { sleep } from "@springbird/effect-temporal/definition";
 import { Charge, ManagerApproval, OrderSaga, OrderStatus, Release, Reserve } from "./definitions.js";

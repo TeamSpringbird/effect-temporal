@@ -5,3 +5,5 @@ allowBuilds:
   msgpackr-extract: true
   protobufjs: true
   esbuild: true
+minimumReleaseAgeExclude:
+  - effect@4.0.0-rc.118

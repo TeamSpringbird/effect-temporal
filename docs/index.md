@@ -31,7 +31,7 @@ features:
 
 ```ts
 import { Effect, Exit, Schema } from "effect";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineActivity, defineDeferred, sleep } from "@springbird/effect-temporal/definition";
 import { workflowBundle } from "@springbird/effect-temporal/bundle";
 import { WorkflowClient } from "@springbird/effect-temporal/client";

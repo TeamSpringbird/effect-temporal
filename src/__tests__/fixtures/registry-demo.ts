@@ -2,7 +2,7 @@
 // test's client side.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 
 export const RegistryChild = Workflow.make("registryChild", {
   payload: { value: Schema.String },

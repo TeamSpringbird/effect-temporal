@@ -24,7 +24,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import type * as Schema from "effect/Schema";
-import type * as Workflow from "effect/unstable/workflow/Workflow";
+import type * as Workflow from "effect/workflow/Workflow";
 import type { ActivityRunner, BoundActivity } from "./activities.js";
 import { makeWorkflowClient, type WorkflowStartOptions } from "./client.js";
 import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/client";

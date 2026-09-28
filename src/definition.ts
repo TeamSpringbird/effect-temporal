@@ -43,8 +43,8 @@ import type * as Exit from "effect/Exit";
 import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
-import type * as Workflow from "effect/unstable/workflow/Workflow";
+import * as DurableDeferred from "effect/workflow/DurableDeferred";
+import type * as Workflow from "effect/workflow/Workflow";
 import type * as DurableMailbox from "./mailbox.js";
 import type * as DurableUpdate from "./update.js";
 import type * as StateCell from "./state-cell.js";
@@ -143,7 +143,7 @@ type IsExactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : fals
  * requires the matching runtime schema, so the declared type and the
  * runtime codec cannot disagree.
  *
- * @since 0.5.1
+ * @since 0.6.0
  * @category models
  */
 export type ActivityDeclaration<

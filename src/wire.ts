@@ -20,8 +20,28 @@
 
 import type * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
-import type * as Workflow from "effect/unstable/workflow/Workflow";
+import type * as Workflow from "effect/workflow/Workflow";
+import { sha256 } from "@noble/hashes/sha2.js";
 import type { AnyTypedActivity, ErrorOf, PayloadOf, SuccessOf } from "./definition.js";
+import { utf8Encode } from "./sandbox-polyfills.js";
+
+/**
+ * The execution id `Workflow.executionId(payload)` returned before
+ * `effect@4.0.0-rc.118` (effect-temporal 0.5.x and earlier): the first 16
+ * bytes of SHA-256 over `${tag}-${idempotencyKey}`, hex-encoded. rc.118
+ * digests `${tag.length}:${tag}:${idempotencyKey}` instead, so a workflow
+ * started under 0.5.x has this id as its Temporal workflow id — use it to
+ * reach (poll, signal, interrupt) an execution started before the upgrade.
+ *
+ * @since 0.6.0
+ * @category wire
+ */
+export const legacyExecutionId = (tag: string, idempotencyKey: string): string => {
+  const digest = sha256(utf8Encode(`${tag}-${idempotencyKey}`));
+  let hex = "";
+  for (let i = 0; i < 16; i++) hex += digest[i]!.toString(16).padStart(2, "0");
+  return hex;
+};
 
 /**
  * Signal by which `deferredDone` reaches a running workflow.

@@ -15,8 +15,8 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
-import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import * as Workflow from "effect/workflow/Workflow";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { handle, implementActivities, type ActivityRunner } from "../activities.js";
 import {

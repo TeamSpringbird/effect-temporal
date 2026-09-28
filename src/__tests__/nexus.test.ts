@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import { describe, expect, it } from "vitest";
 import { makeTemporalClientEngine } from "../engine-client.js";
 import { CallerDemo, GreetDemo } from "./fixtures/nexus-demo.js";

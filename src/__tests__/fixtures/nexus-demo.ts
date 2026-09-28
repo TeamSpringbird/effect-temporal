@@ -4,7 +4,7 @@
 // caller needs the service definition) and by the Node side (the handler).
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import * as nexus from "nexus-rpc";
 
 export interface EchoInput {

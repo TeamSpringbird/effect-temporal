@@ -1,6 +1,6 @@
 # What is effect-temporal?
 
-effect-temporal runs [Effect](https://effect.website) durable-workflow programs on [Temporal](https://temporal.io). You author workflows with `effect/unstable/workflow` — `Workflow`, `Activity`, `DurableClock`, `DurableDeferred` — and this package supplies the engine that executes them on a Temporal cluster, plus the durable primitives entity workflows need that the upstream API does not define.
+effect-temporal runs [Effect](https://effect.website) durable-workflow programs on [Temporal](https://temporal.io). You author workflows with `effect/workflow` — `Workflow`, `Activity`, `DurableClock`, `DurableDeferred` — and this package supplies the engine that executes them on a Temporal cluster, plus the durable primitives entity workflows need that the upstream API does not define.
 
 ```ts
 const OrderFlow = Workflow.make("orderFlow", {
@@ -13,7 +13,7 @@ const OrderFlow = Workflow.make("orderFlow", {
 
 The package is two layers:
 
-1. **An engine.** `effect/unstable/workflow` defines durable-workflow programs against an abstract `WorkflowEngine`; this package implements that engine over Temporal. Effect ships its own engine (`effect/unstable/cluster`, persisting to its own SQL tables) — this one is for codebases that already run Temporal and do not want a second durable-execution system.
+1. **An engine.** `effect/workflow` defines durable-workflow programs against an abstract `WorkflowEngine`; this package implements that engine over Temporal. Effect ships its own engine (`effect/cluster`, persisting to its own SQL tables) — this one is for codebases that already run Temporal and do not want a second durable-execution system.
 2. **An extension layer.** Durable capabilities [declared once](/guide/declaring-capabilities) with the `definition` module and called directly in handlers: `defineActivity` (typed activities), `defineDeferred` (one-shot approvals), `defineMailbox` (repeated inbound signals), `defineUpdate` (request/response with typed channels), `defineState` (queryable published state), `sleep`/`sleepUntil` (durable timers), `continueAsNew` (unbounded workflows), `executeChild` (child workflows), `version`/`versioned`/`evolved` (logic and schema evolution) — plus schedules and Nexus operations backed by these workflows.
 
 The library is one npm package, `@springbird/effect-temporal`, with tree-shakeable subpath modules:
@@ -46,7 +46,7 @@ The Effect program runs *inside* the Temporal workflow sandbox — this is not a
 
 ## When not to use it
 
-- You do not run Temporal and do not want to: use Effect's own `effect/unstable/cluster` engine, or a job queue like [effect-mq](https://github.com/TeamWarp/effect-mq) if what you need is background jobs rather than long-running orchestration.
+- You do not run Temporal and do not want to: use Effect's own `effect/cluster` engine, or a job queue like [effect-mq](https://github.com/TeamWarp/effect-mq) if what you need is background jobs rather than long-running orchestration.
 - You need queue semantics (rate limiting, priorities, fan-out over homogeneous work): that is a job queue's shape, not a workflow's.
 
 ## Where to next

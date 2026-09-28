@@ -3,7 +3,7 @@
 // until the iteration cap.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineDeferred, defineState } from "../../definition.js";
 
 export const LoopDemo = Workflow.make("effectLoopDemo", {

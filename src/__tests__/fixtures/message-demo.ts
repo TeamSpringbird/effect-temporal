@@ -4,7 +4,7 @@
 // finished by a one-shot approval.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineDeferred, defineState, defineUpdate } from "../../definition.js";
 
 export const SUPPORTED_LANGUAGES = ["english", "french", "spanish"] as const;

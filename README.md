@@ -1,7 +1,7 @@
 # effect-temporal
 
 Durable [Effect](https://effect.website) workflows on [Temporal](https://temporal.io):
-author workflows with `effect/unstable/workflow` — schemas, typed errors,
+author workflows with `effect/workflow` — schemas, typed errors,
 composition — and run them on Temporal's retries, timers, signals, history,
 and the operational tooling around them. One schema'd definition per
 workflow, activity, or message channel, shared by the workflow bundle, the
@@ -15,7 +15,7 @@ The same pages live in [docs/](docs/) (`pnpm docs:dev` to browse locally).
 
 ```ts
 import { Effect, Exit, Schema } from "effect";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineActivity, defineDeferred, sleep } from "@springbird/effect-temporal/definition";
 import { workflowBundle } from "@springbird/effect-temporal/bundle";
 import { WorkflowClient } from "@springbird/effect-temporal/client";
@@ -65,7 +65,7 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
 
 - **A real `WorkflowEngine`** — implements Effect's durable-workflow engine
   contract over Temporal, for codebases that already run Temporal and do not
-  want a second durable-execution system (Effect's own `effect/unstable/cluster`
+  want a second durable-execution system (Effect's own `effect/cluster`
   engine persists to its own SQL tables).
 - **One package, tree-shakeable modules** — `@springbird/effect-temporal/definition`
   (declare capabilities once, engine-agnostic — activities, messages, state,
@@ -149,9 +149,9 @@ shipped preset, which resolves the plugin through the package's own
 ## Versioning policy
 
 Pre-1.0: **minor bumps may break APIs**. The `effect` peer dependency is
-pinned **exactly** (currently `4.0.0-rc.112`) and on purpose — the engine
-implements interfaces from `effect/unstable/*`, whose API can move between
-releases. Each release states the one `effect` version it is built and
+pinned **exactly** (currently `4.0.0-rc.118`) and on purpose — the engine
+implements interfaces from `effect/workflow` (still `@stability unstable`
+upstream), whose API can move between releases. Each release states the one `effect` version it is built and
 tested against; tracking a new `effect` release is a new release of this
 package.
 

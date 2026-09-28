@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import { Client } from "@temporalio/client";
 import { describe, expect, it } from "vitest";
 import { makeEffectWorkflowActivities } from "../activities.js";

@@ -3,7 +3,7 @@
 // return) while the slower completion continues to the final result.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineUpdate } from "../../definition.js";
 
 export const GetConfirmation = defineUpdate("get-confirmation", {

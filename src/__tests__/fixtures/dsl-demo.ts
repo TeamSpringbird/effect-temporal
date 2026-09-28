@@ -5,7 +5,7 @@
 // `Effect.forEach`, parallelism to `Effect.all`.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 
 export const DslStep = Schema.Union([
   Schema.Struct({ single: Schema.String }),
