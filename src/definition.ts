@@ -133,6 +133,33 @@ export type SuccessOf<A> =
 export type ErrorOf<A> =
   A extends TypedActivity<string, Schema.Top, Schema.Top, infer E> ? E["Type"] : never;
 
+// Check type assignability in both directions because `A extends B` alone doesn't mean the types match.
+type IsExactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/**
+ * The declaration object `defineActivity` accepts. `success` and `error`
+ * are optional only while their type parameter is the default
+ * (`Schema.Void` / `Schema.Never`). An explicit non-default generic
+ * requires the matching runtime schema, so the declared type and the
+ * runtime codec cannot disagree.
+ *
+ * @since 0.5.1
+ * @category models
+ */
+export type ActivityDeclaration<
+  Payload extends Schema.Struct.Fields | Schema.Top,
+  Success extends Schema.Top,
+  Error extends Schema.Top,
+> = {
+  readonly payload: Payload;
+  readonly options?: TypedActivityOptions;
+} & (IsExactly<Success, Schema.Void> extends true
+  ? { readonly success?: Success }
+  : { readonly success: Success })
+  & (IsExactly<Error, Schema.Never> extends true
+    ? { readonly error?: Error }
+    : { readonly error: Error });
+
 /** Build the serializable projection of an activity declaration. */
 const makeTypedActivity = <
   const Name extends string,
@@ -141,12 +168,7 @@ const makeTypedActivity = <
   Error extends Schema.Top = Schema.Never,
 >(
   name: Name,
-  definition: {
-    readonly payload: Payload;
-    readonly success?: Success;
-    readonly error?: Error;
-    readonly options?: TypedActivityOptions;
-  },
+  definition: ActivityDeclaration<Payload, Success, Error>,
 ): TypedActivity<
   Name,
   Payload extends Schema.Struct.Fields ? Schema.Struct<Payload> : Payload,
@@ -160,8 +182,9 @@ const makeTypedActivity = <
   payloadSchema: (Schema.isSchema(definition.payload)
     ? definition.payload
     : Schema.Struct(definition.payload as Schema.Struct.Fields)) as never,
-  // SAFETY: when the option is omitted the type parameter takes its default
-  // (`Schema.Void` / `Schema.Never`), which is exactly the fallback value.
+  // SAFETY: `ActivityDeclaration` permits omitting `success` or `error` only
+  // when the corresponding `Success` or `Error` type parameter is exactly
+  // `Schema.Void` or `Schema.Never`, respectively, matching the fallback here.
   successSchema: (definition.success ?? Schema.Void) as Success,
   errorSchema: (definition.error ?? Schema.Never) as Error,
   options: definition.options ?? DEFAULT_ACTIVITY_OPTIONS,
@@ -319,12 +342,7 @@ export const defineActivity = <
   Error extends Schema.Top = Schema.Never,
 >(
   name: Name,
-  decl: {
-    readonly payload: Payload;
-    readonly success?: Success;
-    readonly error?: Error;
-    readonly options?: TypedActivityOptions;
-  },
+  decl: ActivityDeclaration<Payload, Success, Error>,
 ): DefinedActivity<
   Name,
   Payload extends Schema.Struct.Fields ? Schema.Struct<Payload> : Payload,
