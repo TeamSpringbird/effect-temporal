@@ -681,17 +681,18 @@ export const continueAsNew = <
   withOps((runtime) => runtime.continueAsNew(workflow, payload, options));
 
 /**
- * Options for `executeChild`.
+ * Options for `executeChild`. `discard: true` starts the child without
+ * awaiting its result and returns its execution id. Omitting `discard`
+ * awaits the child's typed result.
  *
  * @since 0.4.0
  * @category models
  */
-export interface ExecuteChildOptions<Discard extends boolean> {
-  /** `true`: start the child and return its execution id without awaiting;
-   * the child outlives the parent (ABANDON). Default: await the child's
-   * typed result (REQUEST_CANCEL on parent close). */
-  readonly discard?: Discard;
-}
+export type ExecuteChildOptions<Discard extends boolean> = boolean extends Discard
+  ? { readonly discard?: boolean }
+  : Discard extends true
+    ? { readonly discard: true }
+    : { readonly discard?: false };
 
 /**
  * Start a child workflow from a handler — the engine-agnostic form of
@@ -713,7 +714,11 @@ export const executeChild = <
 >(
   workflow: Workflow.Workflow<Tag, Payload, Success, Error>,
   payload: Payload["Type"],
-  options?: ExecuteChildOptions<Discard>,
+  ...[options]: boolean extends Discard
+    ? [options?: ExecuteChildOptions<Discard>]
+    : Discard extends true
+      ? [options: ExecuteChildOptions<Discard>]
+      : [options?: ExecuteChildOptions<Discard>]
 ): Effect.Effect<
   Discard extends true ? string : Success["Type"],
   Discard extends true ? never : Error["Type"],
