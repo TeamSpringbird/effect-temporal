@@ -145,6 +145,11 @@ export const implementActivities = <R, const B extends ReadonlyArray<BoundActivi
 ): Record<B[number]["activity"]["name"], (wire: unknown) => Promise<unknown>> => {
   const out: Record<string, (wire: unknown) => Promise<unknown>> = {};
   for (const binding of bindings) {
+    if (Object.hasOwn(out, binding.activity.name)) {
+      throw new Error(
+        `implementActivities: duplicate activity name "${binding.activity.name}"`,
+      );
+    }
     const codecs = codecsFor(binding.activity);
     out[binding.activity.name] = async (wire: unknown) => {
       let payload: unknown;
