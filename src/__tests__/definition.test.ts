@@ -15,6 +15,7 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
+import * as Workflow from "effect/unstable/workflow/Workflow";
 import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { handle, implementActivities, type ActivityRunner } from "../activities.js";
@@ -26,6 +27,7 @@ import {
   sleepUntilTarget,
   version,
   versioned,
+  type ExecuteChildOptions,
   type PayloadOf,
   type UpdateRequest,
   type WorkflowOps,
@@ -149,6 +151,56 @@ const _types = () => {
   expectTypeOf<Effect.Error<typeof discarded>>().toEqualTypeOf<never>();
   // @ts-expect-error wrong child payload
   executeChild(Fulfil, { orderId: 1 });
+
+  // A numeric child distinguishes its result from a string execution id.
+  const NumberChild = Workflow.make("typeNumberChild", {
+    payload: { reviewerId: Schema.String },
+    idempotencyKey: ({ reviewerId }) => reviewerId,
+    success: Schema.Number,
+    error: Schema.String,
+  });
+
+  const awaitedNumber = executeChild(NumberChild, { reviewerId: "r-1" });
+  expectTypeOf<Effect.Success<typeof awaitedNumber>>().toEqualTypeOf<number>();
+  expectTypeOf<Effect.Error<typeof awaitedNumber>>().toEqualTypeOf<string>();
+
+  const awaitOptions: ExecuteChildOptions<false> = {};
+  const awaitedWithOptions = executeChild(NumberChild, { reviewerId: "r-1a" }, awaitOptions);
+  expectTypeOf<Effect.Success<typeof awaitedWithOptions>>().toEqualTypeOf<number>();
+
+  const discardedNumber = executeChild(NumberChild, { reviewerId: "r-2" }, { discard: true });
+  expectTypeOf<Effect.Success<typeof discardedNumber>>().toEqualTypeOf<string>();
+  expectTypeOf<Effect.Error<typeof discardedNumber>>().toEqualTypeOf<never>();
+
+  const chooseDiscard = (discard: boolean) => {
+    const options: ExecuteChildOptions<boolean> = { discard };
+    return executeChild(NumberChild, { reviewerId: "r-3" }, options);
+  };
+  const maybeDiscarded = chooseDiscard(true);
+  expectTypeOf<Effect.Success<typeof maybeDiscarded>>().toEqualTypeOf<number | string>();
+  expectTypeOf<Effect.Error<typeof maybeDiscarded>>().toEqualTypeOf<string>();
+
+  // @ts-expect-error Discard=true requires the flag when the options are declared.
+  const _incomplete: ExecuteChildOptions<true> = {};
+  const discardOptions: ExecuteChildOptions<true> = { discard: true };
+  const idFromOptions = executeChild(NumberChild, { reviewerId: "r-4" }, discardOptions);
+  expectTypeOf<Effect.Success<typeof idFromOptions>>().toEqualTypeOf<string>();
+
+  // Explicitly selecting Discard=true also requires the actual flag.
+  const explicitlyDiscarded = executeChild<
+    typeof NumberChild["_tag"],
+    typeof NumberChild["payloadSchema"],
+    typeof NumberChild["successSchema"],
+    typeof NumberChild["errorSchema"],
+    true
+  >;
+  // @ts-expect-error Discard=true requires the options argument.
+  explicitlyDiscarded(NumberChild, { reviewerId: "r-5" });
+  // @ts-expect-error Discard=true requires discard: true.
+  explicitlyDiscarded(NumberChild, { reviewerId: "r-6" }, {});
+
+  const explicitId = explicitlyDiscarded(NumberChild, { reviewerId: "r-7" }, { discard: true });
+  expectTypeOf<Effect.Success<typeof explicitId>>().toEqualTypeOf<string>();
 
   // continueAsNew never returns, and checks the payload against the schema.
   const next = continueAsNew(Tally, { batchId: "b", count: 1 });
