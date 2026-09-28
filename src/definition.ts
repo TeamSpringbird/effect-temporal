@@ -224,10 +224,11 @@ export interface SleepOptions {
  */
 export interface SleepUntilOptions {
   readonly name: string;
-  /** Epoch milliseconds, or a date-time string CARRYING ITS ZONE (`Z` or an
-   * explicit offset; date-only forms are UTC per ECMAScript). Zone-less
-   * date-times are rejected: `Date.parse` reads them in the worker's local
-   * timezone, which is nondeterministic across workers and replays. */
+  /**
+   * Epoch milliseconds, an ISO date-only string (UTC), or an ISO date-time
+   * string using `T` with `Z` or an explicit offset. Unsupported string
+   * formats are rejected to avoid worker-local time parsing.
+   */
   readonly timestamp: number | string;
 }
 
@@ -638,26 +639,48 @@ export const sleepUntil = (options: SleepUntilOptions): Effect.Effect<void, neve
   withOps((runtime) => runtime.sleepUntil(options));
 
 /**
- * The one timestamp rule every engine's `sleepUntil` applies: epoch millis
- * pass through; a date-time string must carry its zone (`Z` or an explicit
- * offset — date-only forms are UTC per ECMAScript); anything unparseable is
- * a defect. Zone-less strings would parse in the worker's LOCAL timezone,
- * which differs across workers and replays.
+ * Convert a `sleepUntil` timestamp to epoch milliseconds using the same
+ * rules on every engine. Numeric timestamps pass through. ISO date-only
+ * forms use UTC; date-time strings must use `T` and end in `Z` or an
+ * explicit offset.
+ *
+ * Reject unsupported strings before `Date.parse` can interpret them using
+ * the worker's local timezone or implementation-specific parsing.
  *
  * @since 0.4.0
  * @category timers
  */
 export const sleepUntilTarget = (options: SleepUntilOptions): Effect.Effect<number> =>
   Effect.suspend(() => {
-    if (
-      typeof options.timestamp === "string" &&
-      options.timestamp.includes("T") &&
-      !/(?:Z|[+-]\d{2}:?\d{2})$/.test(options.timestamp)
-    ) {
-      return Effect.die(
-        `sleepUntil "${options.name}": date-time string "${options.timestamp}" has no timezone — zone-less strings parse in the worker's LOCAL timezone, which differs across workers and replays. Add "Z" or an explicit offset, or pass epoch millis.`,
-      );
+    if (typeof options.timestamp === "string") {
+      const timestamp = options.timestamp;
+
+      const isDateOnly =
+        /^(?:\d{4}|[+-]\d{6})(?:-\d{2}(?:-\d{2})?)?$/.test(timestamp);
+
+      const isZonedDateTime =
+        /^(?:\d{4}|[+-]\d{6})-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/.test(
+          timestamp,
+        );
+
+      const isZonelessDateTime =
+        /^(?:\d{4}|[+-]\d{6})-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(
+          timestamp,
+        );
+
+      if (isZonelessDateTime) {
+        return Effect.die(
+          `sleepUntil "${options.name}": date-time string "${timestamp}" has no timezone — zone-less strings parse in the worker's LOCAL timezone, which differs across workers and replays. Add "Z" or an explicit offset, or pass epoch millis.`,
+        );
+      }
+
+      if (!isDateOnly && !isZonedDateTime) {
+        return Effect.die(
+          `sleepUntil "${options.name}": unsupported timestamp format "${timestamp}" — use an ISO date-only string or a date-time string with "T" and "Z" or an explicit offset.`,
+        );
+      }
     }
+
     const target =
       typeof options.timestamp === "number" ? options.timestamp : Date.parse(options.timestamp);
     if (Number.isNaN(target)) {

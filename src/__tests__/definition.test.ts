@@ -23,6 +23,7 @@ import {
   defineActivity,
   executeChild,
   sleepUntil,
+  sleepUntilTarget,
   version,
   versioned,
   type PayloadOf,
@@ -329,6 +330,31 @@ describe("definition 0.4.0: the seam is complete", { concurrent: false }, () => 
     });
     await Effect.runPromise(Effect.provide(program, TestClock.layer()));
   }, 20_000);
+
+  it("sleepUntilTarget rejects space-separated date-times without a timezone", async () => {
+    const zoneless = await Effect.runPromiseExit(
+      sleepUntilTarget({ name: "z", timestamp: "2026-01-01 02:00:00" }),
+    );
+
+    expect(Exit.isFailure(zoneless) && Cause.hasDies(zoneless.cause)).toBe(true);
+    expect(Exit.isFailure(zoneless) && String(Cause.squash(zoneless.cause))).toMatch(/no timezone/);
+  });
+
+  it("sleepUntilTarget accepts explicit zones, date-only forms, and epoch millis", async () => {
+    const expected = Date.UTC(2026, 0, 1);
+
+    for (const timestamp of [
+      "2026",
+      "2026-01",
+      "2026-01-01",
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T05:30:00+05:30",
+      expected,
+    ]) {
+      const target = await Effect.runPromise(sleepUntilTarget({ name: "not-before", timestamp }));
+      expect(target).toBe(expected);
+    }
+  });
 
   it("in memory, continueAsNew interrupts the run and records the schema-checked payload", async () => {
     await Effect.runPromise(
