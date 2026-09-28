@@ -7,9 +7,9 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as Activity from "effect/unstable/workflow/Activity";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Activity from "effect/workflow/Activity";
+import * as DurableClock from "effect/workflow/DurableClock";
+import * as Workflow from "effect/workflow/Workflow";
 import { proxyActivities } from "@temporalio/workflow";
 import { callRawActivity } from "../../engine-sandbox.js";
 import { workflowBundle } from "../../bundle.js";

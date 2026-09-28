@@ -4,7 +4,7 @@ A workflow definition is the shared contract between the workflow bundle, the wo
 
 ```ts
 import { Schema } from "effect";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 
 export const OrderFlow = Workflow.make("orderFlow", {
   payload: { orderId: Schema.String, sku: Schema.String },

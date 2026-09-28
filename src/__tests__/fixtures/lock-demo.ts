@@ -3,7 +3,7 @@
 // entirely through workflow-to-workflow mailbox messages.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineMailbox } from "../../definition.js";
 
 export const AcquireRequests = defineMailbox("acquire", {

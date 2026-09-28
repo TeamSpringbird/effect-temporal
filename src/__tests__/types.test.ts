@@ -15,8 +15,8 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import type * as Option from "effect/Option";
-import type * as Workflow from "effect/unstable/workflow/Workflow";
-import type * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import type * as Workflow from "effect/workflow/Workflow";
+import type * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import { describe, expect, expectTypeOf, it } from "vitest";
 // Type tests pin both halves' signatures in one place; nothing here runs in
 // either process, so the sandbox/client separation the rule protects is moot.

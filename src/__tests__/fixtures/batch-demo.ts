@@ -5,7 +5,7 @@
 // mid-batch, carrying its in-flight set into the next run.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineMailbox } from "../../definition.js";
 
 export const CompletionReports = defineMailbox("record-complete", {

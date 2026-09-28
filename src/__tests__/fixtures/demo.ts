@@ -2,7 +2,7 @@
 // client-side tests. No `@temporalio/*` imports: it loads in both worlds.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineDeferred } from "../../definition.js";
 
 /** The approval gate; completed from outside via

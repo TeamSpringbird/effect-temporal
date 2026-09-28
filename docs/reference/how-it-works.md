@@ -4,7 +4,7 @@ Effect and Temporal each manage their own execution and their own clocks. This p
 
 ## The two halves
 
-`effect/unstable/workflow` defines workflow programs against an abstract `WorkflowEngine`. This package implements that engine twice:
+`effect/workflow` defines workflow programs against an abstract `WorkflowEngine`. This package implements that engine twice:
 
 - **`engine-sandbox`** runs *inside* the Temporal workflow sandbox. `workflowBundle` (exported to applications from the `bundle` module) builds the bundle's one dynamic workflow function from `Workflow.toLayer` registrations: per run it decodes the payload, provides the engine and the Temporal `WorkflowOps` (the seam [declared capabilities](/guide/declaring-capabilities) dispatch through), runs your handler as an Effect program, and encodes the exit. Engine operations map to sandbox primitives — child starts to `startChild`, deferreds to signals + `condition()`, clocks to durable timers.
 - **`engine-client`** runs in ordinary Node. Engine operations map to Temporal client calls — `execute` starts (or attaches) and awaits, `poll` describes, `interrupt` cancels.

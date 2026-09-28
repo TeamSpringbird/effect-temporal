@@ -15,7 +15,7 @@
 // `new Client(...)` and a `Worker.create` against that connection.
 
 import { Effect, Exit, Layer, Option, Result } from "effect";
-import type * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import type * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import type { Client } from "@temporalio/client";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";

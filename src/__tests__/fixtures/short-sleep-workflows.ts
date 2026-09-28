@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
+import * as DurableClock from "effect/workflow/DurableClock";
 import { proxyActivities } from "@temporalio/workflow";
 import { callRawActivity } from "../../engine-sandbox.js";
 import { workflowBundle } from "../../bundle.js";

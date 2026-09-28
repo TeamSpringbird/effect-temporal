@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import { defineActivity } from "../../definition.js";
 
 export const OutOfStock = Schema.TaggedStruct("OutOfStock", {

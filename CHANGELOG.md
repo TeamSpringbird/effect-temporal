@@ -5,9 +5,59 @@
 effect-temporal is pre-1.0: **minor bumps may break APIs**; patch bumps are fixes only.
 
 The `effect` peer dependency is pinned **exactly** on purpose — the engine implements
-interfaces from `effect/unstable/*`, whose API can move between releases. Each release
+interfaces from `effect/workflow` (still `@stability unstable` upstream), whose API can
+move between releases. Each release
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
+
+## 0.6.0 (unreleased)
+
+Tracks `effect@4.0.0-rc.118`, which removes effect's `unstable` subpath namespace.
+
+- BREAKING: `effect` peer (and dev pin) moved to exactly `4.0.0-rc.118` (was
+  `4.0.0-rc.112`). Consumers must move to rc.118 in lockstep.
+- Import paths follow effect's flattened layout: the workflow modules
+  (formerly under `unstable/workflow/*`) are imported from `effect/workflow/*`
+  across the source, the emitted `dist`, the examples, and the docs. Consumer
+  code makes the same rewrite (and effect's other moves — `unstable/http` →
+  `effect/http`, `effect/Encoding` → `effect/encoding/*`, …) as part of the
+  effect bump.
+- BEHAVIOR (upstream): rc.118 changed the `Workflow.executionId` digest from
+  `${tag}-${key}` to `${tag.length}:${tag}:${key}`. The execution id is the
+  Temporal workflow id, so the same payload now maps to a DIFFERENT workflow
+  id than under 0.5.x: re-executing (attach/dedupe), polling, signalling or
+  interrupting by `executionId(payload)` does not reach an execution started
+  before the upgrade. Drain in-flight workflows first, or address them with
+  the new `legacyExecutionId`.
+- Child workflow starts stay replay-safe: inside the sandbox the child's
+  workflow id is gated on a new patch marker,
+  `effect-temporal-child-execution-id-rc118`. A history recorded without the
+  marker replays its child starts under the pre-rc.118 id; new executions
+  record the marker and use the rc.118 id. This adds one marker event to the
+  history of every run that starts a child.
+- ADDED: `legacyExecutionId(tag, idempotencyKey)` in `wire` — the pre-rc.118
+  execution id, for reaching executions started on 0.5.x.
+- Replay drill: `definition-dispatch-0.6.0` (a child start behind the new
+  marker) replays alongside the earlier histories, and the 0.4.0 dispatch
+  history's child id is pinned to `legacyExecutionId`.
+- BREAKING (types): `defineActivity` requires the `success` / `error` schema
+  whenever its type parameter is not the default (`Schema.Void` /
+  `Schema.Never`), so the declared type and the runtime codec cannot
+  disagree. The declaration shape is exported as `ActivityDeclaration`. (#8)
+- BREAKING: `implementActivities` throws on a duplicate activity name instead
+  of letting the later binding silently overwrite the earlier one. (#9)
+- BEHAVIOR: `sleepUntil` accepts only epoch millis, ISO date-only strings
+  (UTC), and ISO date-times using `T` that end in `Z` or an explicit offset.
+  Zone-less date-times, now including the space-separated form
+  (`2026-01-01 09:00`), and any other string format die loudly on every
+  engine instead of reaching `Date.parse`. (#10)
+- BREAKING (types): `ExecuteChildOptions<true>` requires `discard: true`, so
+  `executeChild` cannot be typed as returning an execution id while it awaits
+  the child's result. `ExecuteChildOptions` is now a type alias instead of an
+  interface. (#11)
+- No other public API change.
+
+Built and tested against `effect@4.0.0-rc.118` and `@temporalio/*@1.19.0`.
 
 ## 0.5.0 (2026-09-10)
 
@@ -177,7 +227,7 @@ release setup and unpublished; npm version numbers are never reusable.)
 
 Initial standalone release, extracted from the Springbird monorepo.
 
-- Temporal engine for `effect/unstable/workflow` (`Workflow`, `Activity`,
+- Temporal engine for Effect's workflow module (`Workflow`, `Activity`,
   `DurableClock`, `DurableDeferred`): sandbox half (`engine-sandbox`) and client
   half (`engine-client`), plus the `WorkflowClient` service.
 - Durable extension primitives: `DurableMailbox`, `DurableUpdate`, `StateCell`,

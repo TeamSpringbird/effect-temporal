@@ -12,7 +12,7 @@
 
 import { fileURLToPath } from "node:url";
 import * as Effect from "effect/Effect";
-import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import { bundleWorkflowCode, Worker, type WorkflowBundleWithSourceMap } from "@temporalio/worker";
 import { describe, expect, it } from "vitest";
 import { makeTemporalClientEngine } from "../engine-client.js";

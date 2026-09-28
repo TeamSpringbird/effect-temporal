@@ -4,7 +4,7 @@ The honest list. Most of these are deliberate trade-offs; the rest are edges of 
 
 ## Pinned `effect` version
 
-The engine implements interfaces from `effect/unstable/*`, whose API can move between releases — the `effect` peer dependency is pinned **exactly**, and tracking a new `effect` release is a new release of this package. Plan for lockstep upgrades until Effect v4's workflow API stabilizes.
+The engine implements interfaces from `effect/workflow` (still `@stability unstable` upstream), whose API can move between releases — the `effect` peer dependency is pinned **exactly**, and tracking a new `effect` release is a new release of this package. Plan for lockstep upgrades until Effect v4's workflow API stabilizes.
 
 ## Attach polling costs history
 

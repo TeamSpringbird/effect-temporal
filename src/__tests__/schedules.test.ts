@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
-import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import { describe, expect, it } from "vitest";
 import { createWorkflowSchedule, makeTemporalClientEngine } from "../engine-client.js";
 import { LoopDemo } from "./fixtures/loop-demo.js";

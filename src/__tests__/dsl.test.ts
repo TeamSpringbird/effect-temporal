@@ -5,7 +5,7 @@
 
 import { fileURLToPath } from "node:url";
 import * as Effect from "effect/Effect";
-import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import { describe, expect, it } from "vitest";
 import { makeTemporalClientEngine } from "../engine-client.js";
 import { DslDemo } from "./fixtures/dsl-demo.js";

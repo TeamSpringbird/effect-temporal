@@ -5,7 +5,7 @@
 
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as Activity from "effect/unstable/workflow/Activity";
+import * as Activity from "effect/workflow/Activity";
 import { proxyActivities } from "@temporalio/workflow";
 import { callRawActivity } from "../../engine-sandbox.js";
 import { workflowBundle } from "../../bundle.js";

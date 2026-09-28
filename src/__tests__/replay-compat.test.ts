@@ -12,6 +12,11 @@
 //                              own activity
 //   definition-grace-0.4.0     `defGrace` on 0.4.0 — a durable timer racing
 //                              a mailbox take (the take wins, timer cancelled)
+//   definition-dispatch-0.6.0  `defDispatch` on 0.6.0 (effect rc.118) — the
+//                              child starts under the rc.118 execution id,
+//                              behind the child-execution-id patch marker;
+//                              the 0.4.0 dispatch history (no marker) proves
+//                              pre-rc.118 child ids still replay
 //
 // The current bundle must replay every one clean: activity types, signal
 // and query names, update names, child workflow types, timer commands, and
@@ -27,6 +32,7 @@ import { fileURLToPath } from "node:url";
 import { temporal as proto } from "@temporalio/proto";
 import { bundleWorkflowCode, Worker } from "@temporalio/worker";
 import { describe, expect, it } from "vitest";
+import { legacyExecutionId } from "../wire.js";
 
 const workflowsPath = fileURLToPath(new URL("./fixtures/definition-workflows.ts", import.meta.url));
 
@@ -55,6 +61,9 @@ describe("replay compatibility", { concurrent: false }, () => {
     const dispatchKinds = new Set(dispatch.events.map((event) => event.eventType));
     expect(dispatchKinds.has(proto.api.enums.v1.EventType.EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED)).toBe(true);
     expect(dispatchKinds.has(proto.api.enums.v1.EventType.EVENT_TYPE_MARKER_RECORDED)).toBe(true);
+    const childId = dispatch.events.find((event) => event.startChildWorkflowExecutionInitiatedEventAttributes)
+      ?.startChildWorkflowExecutionInitiatedEventAttributes?.workflowId;
+    expect(childId).toBe(legacyExecutionId("defFulfil", "hist-0.4.0"));
 
     const grace = loadHistory("definition-grace-0.4.0");
     const graceKinds = new Set(grace.events.map((event) => event.eventType));
@@ -64,5 +73,19 @@ describe("replay compatibility", { concurrent: false }, () => {
     const workflowBundle = await bundleWorkflowCode({ workflowsPath });
     await expect(Worker.runReplayHistory({ workflowBundle }, dispatch)).resolves.toBeUndefined();
     await expect(Worker.runReplayHistory({ workflowBundle }, grace)).resolves.toBeUndefined();
+  }, 120_000);
+
+  it("replays a 0.6.0 child start under the rc.118 execution id", async () => {
+    const dispatch = loadHistory("definition-dispatch-0.6.0");
+    const patchIds = dispatch.events.flatMap((event) =>
+      (event.markerRecordedEventAttributes?.details?.["patch-data"]?.payloads ?? []).map(
+        (payload) => (JSON.parse(Buffer.from(payload.data ?? []).toString("utf8")) as { id: string }).id,
+      ),
+    );
+    expect(patchIds).toContain("effect-temporal-child-execution-id-rc118");
+    expect(dispatch.events.some((event) => event.startChildWorkflowExecutionInitiatedEventAttributes)).toBe(true);
+
+    const workflowBundle = await bundleWorkflowCode({ workflowsPath });
+    await expect(Worker.runReplayHistory({ workflowBundle }, dispatch)).resolves.toBeUndefined();
   }, 120_000);
 });

@@ -54,9 +54,9 @@ import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { MixedScheduler } from "effect/Scheduler";
-import * as Activity from "effect/unstable/workflow/Activity";
-import * as Workflow from "effect/unstable/workflow/Workflow";
-import * as WorkflowEngine from "effect/unstable/workflow/WorkflowEngine";
+import * as Activity from "effect/workflow/Activity";
+import * as Workflow from "effect/workflow/Workflow";
+import * as WorkflowEngine from "effect/workflow/WorkflowEngine";
 import {
   ApplicationFailure,
   CancellationScope,
@@ -87,13 +87,14 @@ import {
   decodeDeferredExit,
   encodeDeferredExit,
   EXIT_FAILURE_TYPE,
+  legacyExecutionId,
   makeClassifyThrown,
   wireCodecsFor,
   type DeferredDoneSignalPayload,
   type EffectWorkflowBridgeResult,
 } from "./wire.js";
 import * as Clock from "effect/Clock";
-import * as DurableClock from "effect/unstable/workflow/DurableClock";
+import * as DurableClock from "effect/workflow/DurableClock";
 import { ensureSandboxPolyfills } from "./sandbox-polyfills.js";
 import {
   MAILBOX_SIGNAL,
@@ -102,7 +103,7 @@ import {
   type MailboxSignalPayload,
 } from "./mailbox.js";
 import { STATE_CELL_QUERY, stateCellCodec, type StateCell } from "./state-cell.js";
-import * as DurableDeferred from "effect/unstable/workflow/DurableDeferred";
+import * as DurableDeferred from "effect/workflow/DurableDeferred";
 import {
   sleepUntilTarget,
   toMailbox,
@@ -605,6 +606,11 @@ const unreachable = (method: string) =>
     `TemporalSandboxEngine.${method}: reachable only through the client half — inside the sandbox this indicates a shim bug`,
   );
 
+/** Patch marker gating the child workflow id: `effect@4.0.0-rc.118` changed
+ * the `Workflow.executionId` digest, so a history recorded before the marker
+ * existed replays its child starts under the pre-rc.118 id. */
+const CHILD_EXECUTION_ID_PATCH = "effect-temporal-child-execution-id-rc118";
+
 const makeSandboxEngine = (state: RunState): WorkflowEngine.WorkflowEngine["Service"] =>
   WorkflowEngine.makeUnsafe({
     // The bundle export is the registration.
@@ -626,9 +632,12 @@ const makeSandboxEngine = (state: RunState): WorkflowEngine.WorkflowEngine["Serv
       return Effect.promise(async () => {
         let owned = true;
         let handle: ChildWorkflowHandle<(wire: unknown) => Promise<unknown>> | undefined;
+        const workflowId = patched(CHILD_EXECUTION_ID_PATCH)
+          ? executionId
+          : legacyExecutionId(workflow._tag, workflow.idempotencyKey(payload));
         try {
           handle = await startChild<(wire: unknown) => Promise<unknown>>(workflow._tag, {
-            workflowId: executionId,
+            workflowId,
             args: [wirePayload],
             workflowIdReusePolicy: "REJECT_DUPLICATE",
             // Awaited children get cancel-on-parent-close so their own
@@ -655,7 +664,7 @@ const makeSandboxEngine = (state: RunState): WorkflowEngine.WorkflowEngine["Serv
         }
         let pollWaitMillis = ATTACH_POLL_MILLIS;
         while (!interrupted) {
-          const polled = await bridge.effectWorkflowPollResult({ workflowId: executionId });
+          const polled = await bridge.effectWorkflowPollResult({ workflowId });
           switch (polled.kind) {
             case "running":
               break;

@@ -4,7 +4,7 @@
 // imports here — this module loads in every world.
 
 import { Schema } from "effect";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 import {
   defineActivity,
   defineDeferred,

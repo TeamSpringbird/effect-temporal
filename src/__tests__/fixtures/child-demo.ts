@@ -2,7 +2,7 @@
 // client-side tests. No `@temporalio/*` imports.
 
 import * as Schema from "effect/Schema";
-import * as Workflow from "effect/unstable/workflow/Workflow";
+import * as Workflow from "effect/workflow/Workflow";
 
 export const ChildDemo = Workflow.make("effectChildDemo", {
   payload: {
