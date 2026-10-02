@@ -10,7 +10,7 @@ move between releases. Each release
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
 
-## 0.6.1 (unreleased)
+## 0.6.1 (2026-10-02)
 
 Tracks `effect@4.0.0`, the first stable Effect v4 release.
 
