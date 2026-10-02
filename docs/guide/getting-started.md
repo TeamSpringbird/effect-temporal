@@ -9,7 +9,7 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
 `effect`, `@temporalio/client`, and `@temporalio/workflow` are peer dependencies (modern package managers install them for you). You will also want `@temporalio/worker` to run a worker and `@temporalio/testing` for the test harness — both optional peers, used only where you use them.
 
 ::: warning Effect version
-effect-temporal targets **Effect v4** and pins its `effect` peer **exactly** (currently `4.0.0-rc.118`): the engine implements interfaces from `effect/workflow` (still `@stability unstable` upstream), whose API can move between releases. Match the pinned version; each release of this package states the one `effect` version it is built and tested against.
+effect-temporal targets **Effect v4** and pins its `effect` peer **exactly** (currently `4.0.0`): the engine implements interfaces from `effect/workflow` (still `@stability unstable` upstream), whose API can move between releases. Match the pinned version; each release of this package states the one `effect` version it is built and tested against.
 :::
 
 A Temporal deployment has three kinds of process, and this package has a module for each:

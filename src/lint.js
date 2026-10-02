@@ -329,6 +329,6 @@ const rules = {
 };
 
 export default {
-  meta: { name: "effect-temporal", version: "0.6.0" },
+  meta: { name: "effect-temporal", version: "0.6.1" },
   rules,
 };
