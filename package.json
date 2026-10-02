@@ -1,6 +1,6 @@
 {
   "name": "@springbird/effect-temporal",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Run `effect/workflow` programs (Workflow / Activity / DurableClock / DurableDeferred) on a Temporal engine, plus durable mailboxes, updates, queryable state, versioning, schedules, and Nexus operations.",
   "license": "MIT",
   "type": "module",
@@ -77,7 +77,7 @@
     "@temporalio/testing": "~1.19.0",
     "@temporalio/worker": "~1.19.0",
     "@temporalio/workflow": "~1.19.0",
-    "effect": "4.0.0-rc.118"
+    "effect": "4.0.0"
   },
   "peerDependenciesMeta": {
     "@temporalio/nexus": {
@@ -102,7 +102,7 @@
     "@temporalio/worker": "1.19.0",
     "@temporalio/workflow": "1.19.0",
     "@types/node": "^22.19.9",
-    "effect": "4.0.0-rc.118",
+    "effect": "4.0.0",
     "nexus-rpc": "^0.0.2",
     "oxlint": "1.77.0",
     "typescript": "^5.9.0",

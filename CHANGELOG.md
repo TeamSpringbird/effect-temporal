@@ -10,6 +10,21 @@ move between releases. Each release
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
 
+## 0.6.1 (unreleased)
+
+Tracks `effect@4.0.0`, the first stable Effect v4 release.
+
+- `effect` peer (and dev pin) moved to exactly `4.0.0` (was `4.0.0-rc.118`).
+  Consumers must move to 4.0.0 in lockstep.
+- No API changes. effect 4.0.0 exports the same surface as rc.118, and
+  `Workflow.executionId` hashes the same way, so workflow ids and replay are
+  unchanged and no new patch marker is needed.
+- BEHAVIOR (upstream): `Array.partition`, `Array.separate`, `Chunk.partition`,
+  `Chunk.separate`, `Effect.partition`, `Option.partitionMap` and
+  `Record.partition` now return `[passes, fails]` instead of
+  `[fails, passes]`. effect-temporal does not use them, but consumer code
+  that does must flip its destructuring when it upgrades effect.
+
 ## 0.6.0 (2026-09-28)
 
 Tracks `effect@4.0.0-rc.118`, which removes effect's `unstable` subpath namespace.

@@ -149,7 +149,7 @@ shipped preset, which resolves the plugin through the package's own
 ## Versioning policy
 
 Pre-1.0: **minor bumps may break APIs**. The `effect` peer dependency is
-pinned **exactly** (currently `4.0.0-rc.118`) and on purpose — the engine
+pinned **exactly** (currently `4.0.0`) and on purpose — the engine
 implements interfaces from `effect/workflow` (still `@stability unstable`
 upstream), whose API can move between releases. Each release states the one `effect` version it is built and
 tested against; tracking a new `effect` release is a new release of this
