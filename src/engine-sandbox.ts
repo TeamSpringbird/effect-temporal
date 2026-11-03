@@ -292,9 +292,14 @@ const callTypedActivity = <A extends AnyTypedActivity>(
     Effect.map((result) => codecs.success.decode(result === undefined ? null : result)),
     Effect.catchDefect((defect) => {
       const thrown = classifyActivityThrown(defect);
-      return thrown.kind === "wire"
-        ? Effect.fail(codecs.error.decode(thrown.exit))
-        : Effect.die(defect);
+      switch (thrown.kind) {
+        case "interrupted":
+          return Effect.interrupt;
+        case "wire":
+          return Effect.fail(codecs.error.decode(thrown.exit));
+        case "other":
+          return Effect.die(thrown.error);
+      }
     }),
   );
 };
@@ -896,7 +901,16 @@ const runInSandbox = async (
 
       // SAFETY: payload was decoded through this workflow's own schema, and
       // the handler was registered for this workflow.
-      const body = Effect.raceFirst(handler(payload as never, executionId), cancelled);
+      const body = Effect.raceFirst(handler(payload as never, executionId), cancelled).pipe(
+        // An activity can report cancellation without a workflow cancel request.
+        // intoResult must capture that interrupt so isCancellationExit can turn
+        // it into Temporal cancellation instead of rejecting the workflow task.
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            instance.interrupted = true;
+          }),
+        ),
+      );
 
       const program = Workflow.intoResult(body).pipe(
         Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
