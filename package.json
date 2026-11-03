@@ -56,6 +56,10 @@
       "types": "./dist/wire.d.ts",
       "default": "./dist/wire.js"
     },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -72,6 +76,7 @@
     "access": "public"
   },
   "peerDependencies": {
+    "@temporalio/activity": "~1.19.0",
     "@temporalio/client": "~1.19.0",
     "@temporalio/nexus": "~1.19.0",
     "@temporalio/testing": "~1.19.0",
@@ -94,6 +99,7 @@
     "@noble/hashes": "^2.0.1"
   },
   "devDependencies": {
+    "@temporalio/activity": "1.19.0",
     "@temporalio/client": "1.19.0",
     "@temporalio/common": "1.19.0",
     "@temporalio/nexus": "1.19.0",

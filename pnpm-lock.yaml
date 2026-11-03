@@ -12,6 +12,9 @@ importers:
         specifier: ^2.0.1
         version: 2.3.0
     devDependencies:
+      '@temporalio/activity':
+        specifier: 1.19.0
+        version: 1.19.0
       '@temporalio/client':
         specifier: 1.19.0
         version: 1.19.0

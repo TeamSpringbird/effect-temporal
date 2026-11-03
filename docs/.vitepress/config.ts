@@ -76,6 +76,7 @@ export default defineConfig({
           { text: "Defining workflows", link: "/guide/defining-workflows" },
           { text: "Declaring capabilities", link: "/guide/declaring-capabilities" },
           { text: "Activities", link: "/guide/activities" },
+          { text: "Worker runner", link: "/guide/worker-runner" },
           { text: "Timers & approvals", link: "/guide/timers-and-approvals" },
           { text: "Child workflows", link: "/guide/child-workflows" },
           { text: "Continue-as-new", link: "/guide/continue-as-new" },
