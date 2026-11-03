@@ -7,6 +7,7 @@
 //      and (b) on real Temporal via `workflowBundle`.
 
 import { fileURLToPath } from "node:url";
+import { ApplicationFailure, CancelledFailure } from "@temporalio/client";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -252,6 +253,39 @@ describe("definition: one declaration, types flow, engine-agnostic", { concurren
       }),
     );
   }, 20_000);
+
+  it("maps a nested typed activity cancellation to an interrupt without a client cancel", async () => {
+    const workflowsPath = fileURLToPath(new URL("./fixtures/definition-workflows.ts", import.meta.url));
+    const activities = {
+      [Reserve.name]: async () => {
+        // The worker normalizes a bare CancelledFailure to an application
+        // failure unless cancellation was requested. Preserve the cancellation
+        // as a nested cause to exercise the classifier across the wire.
+        throw ApplicationFailure.create({
+          message: "activity cancelled independently",
+          nonRetryable: true,
+          cause: new CancelledFailure("cancelled dependency"),
+        });
+      },
+    };
+    await temporal.withWorker({ activities, workflowsPath }, async (taskQueue) => {
+      const client = temporal.env.client;
+      const execution = await client.workflow.start("activityCancellation", {
+        taskQueue,
+        workflowId: taskQueue,
+        args: [{}],
+      });
+      // Temporal wraps the activity's cancellation in ActivityFailure. It must
+      // become an interrupt, rather than a defect that fails the workflow.
+      await expect(execution.result()).resolves.toMatchObject({ _tag: "Success", value: true });
+      const uncaught = await client.workflow.start("defOrder", {
+        taskQueue,
+        workflowId: `${taskQueue}-uncaught`,
+        args: [{ orderId: "cancelled" }],
+      });
+      await expect(uncaught.result()).rejects.toMatchObject({ cause: expect.any(CancelledFailure) });
+    });
+  });
 
   it("runs the SAME handler on real Temporal through workflowBundle", async () => {
     const workflowsPath = fileURLToPath(new URL("./fixtures/definition-workflows.ts", import.meta.url));
