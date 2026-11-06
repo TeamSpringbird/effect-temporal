@@ -10,6 +10,12 @@ move between releases. Each release
 of this package states the one `effect` version it is built and tested against, and
 tracking a new `effect` release is a new release of this package.
 
+## Unreleased
+
+- Track `effect@4.1.2` with an exact peer and development pin (previously
+  `4.0.0`); consumers must update Effect in lockstep. Update Temporal SDK
+  pins from 1.19.0 to 1.21.1.
+
 ## 0.6.1 (2026-10-02)
 
 Tracks `effect@4.0.0`, the first stable Effect v4 release.
