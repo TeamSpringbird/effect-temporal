@@ -9,11 +9,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@temporalio/client": "1.19.0",
-    "@temporalio/testing": "1.19.0",
-    "@temporalio/worker": "1.19.0",
-    "@temporalio/workflow": "1.19.0",
-    "effect": "4.0.0",
+    "@temporalio/client": "1.21.1",
+    "@temporalio/testing": "1.21.1",
+    "@temporalio/worker": "1.21.1",
+    "@temporalio/workflow": "1.21.1",
+    "effect": "4.1.2",
     "@springbird/effect-temporal": "workspace:*"
   },
   "devDependencies": {
