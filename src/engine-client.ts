@@ -34,6 +34,7 @@ import {
   type ScheduleHandle,
   type ScheduleSpec,
   type WorkflowHandle,
+  type WorkflowOptions,
 } from "@temporalio/client";
 import {
   asJsonCodec,
@@ -68,6 +69,14 @@ import {
 export interface TemporalClientEngineOptions {
   readonly client: Client;
   readonly taskQueue: string;
+  /** Defaults to REJECT_DUPLICATE to preserve Effect's start-or-attach contract. */
+  readonly workflowIdReusePolicy?: WorkflowOptions["workflowIdReusePolicy"];
+  /**
+   * Temporal's policy for an execution that is still running. If Temporal
+   * reports an already-started error (including with FAIL), this engine
+   * attaches to the existing execution instead of exposing the error.
+   */
+  readonly workflowIdConflictPolicy?: WorkflowOptions["workflowIdConflictPolicy"];
 }
 
 const workflowSideOnly = (method: string) =>
@@ -111,10 +120,8 @@ export const makeTemporalClientEngine = (
 ): WorkflowEngine.WorkflowEngine["Service"] => {
   const { client, taskQueue } = options;
 
-  /** Start, or attach to the execution this id already names.
-   * REJECT_DUPLICATE is load-bearing: the default reuse policy would start
-   * a fresh (duplicate, side-effecting) run once the first one closed,
-   * where the idempotency contract requires the original result forever. */
+  /** Preserve start-or-attach by default; callers can explicitly opt into
+   * Temporal's closed-run reuse policy for application-controlled restarts. */
   const startOrAttach = async (
     workflowType: string,
     executionId: string,
@@ -125,7 +132,10 @@ export const makeTemporalClientEngine = (
         workflowId: executionId,
         taskQueue,
         args: [wirePayload],
-        workflowIdReusePolicy: "REJECT_DUPLICATE",
+        workflowIdReusePolicy: options.workflowIdReusePolicy ?? "REJECT_DUPLICATE",
+        ...(options.workflowIdConflictPolicy === undefined
+          ? {}
+          : { workflowIdConflictPolicy: options.workflowIdConflictPolicy }),
       });
     } catch (error) {
       if (error instanceof WorkflowExecutionAlreadyStartedError) {

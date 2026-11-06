@@ -51,6 +51,190 @@ const approve = (executionId: string, approver: string) =>
   });
 
 describe("core primitives over Temporal", { concurrent: false }, () => {
+  it("applies configured reuse policies through WorkflowClient for digest and explicit IDs", async () => {
+    const { activities } = makeActivities();
+    await temporal.withWorker({ activities, workflowsPath }, async (taskQueue) => {
+      const client = temporal.env.client;
+      const wf = makeWorkflowClient({
+        client, taskQueue,
+        workflowIdReusePolicy: "ALLOW_DUPLICATE_FAILED_ONLY",
+        workflowIdConflictPolicy: "USE_EXISTING",
+      });
+      const engine = makeTemporalClientEngine({ client, taskQueue });
+      const payload = { requestId: "client-policy-digest", mode: "fail-after-step" } as const;
+      const id = await Effect.runPromise(Effect.provideService(
+        Demo.executionId(payload), WorkflowEngine.WorkflowEngine, engine,
+      ));
+      const explicitId = `${taskQueue}-explicit-policy`;
+      for (const options of [undefined, { workflowId: explicitId }]) {
+        const workflowId = options?.workflowId ?? id;
+        expect(Result.isFailure(await Effect.runPromise(Effect.result(wf.execute(Demo, payload, options))))).toBe(true);
+        const first = await client.workflow.getHandle(workflowId).describe();
+        expect(first.status.name).toBe("FAILED");
+        expect(Result.isFailure(await Effect.runPromise(Effect.result(wf.execute(Demo, payload, options))))).toBe(true);
+        const second = await client.workflow.getHandle(workflowId).describe();
+        expect(second.status.name).toBe("FAILED");
+        expect(second.runId).not.toBe(first.runId);
+      }
+    });
+  }, 120_000);
+
+  it("uses the configured conflict policy for explicit-ID WorkflowClient starts", async () => {
+    const { activities } = makeActivities();
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const activityStarted = new Promise<void>((resolve) => { started = resolve; });
+    activities.longTask = async () => {
+      started();
+      await gate;
+      return "done";
+    };
+    await temporal.withWorker({ activities, workflowsPath }, async (taskQueue) => {
+      const client = temporal.env.client;
+      const wf = makeWorkflowClient({
+        client, taskQueue, workflowIdConflictPolicy: "USE_EXISTING",
+      });
+      const workflowId = `${taskQueue}-explicit-active`;
+      const payload = { requestId: "client-explicit-active", mode: "long-activity" } as const;
+      try {
+        await Effect.runPromise(wf.start(Demo, payload, { workflowId }));
+        await activityStarted;
+        const handle = client.workflow.getHandle(workflowId);
+        const first = await handle.describe();
+        await Effect.runPromise(wf.start(Demo, payload, { workflowId }));
+        expect((await handle.describe()).runId).toBe(first.runId);
+        release();
+        await handle.result();
+      } finally {
+        release();
+      }
+    });
+  }, 120_000);
+
+  it("restarts failed executions only when reuse is enabled", async () => {
+    const { activities } = makeActivities();
+    await temporal.withWorker({ activities, workflowsPath }, async (taskQueue) => {
+      const client = temporal.env.client;
+      const defaults = makeTemporalClientEngine({ client, taskQueue });
+      const restart = makeTemporalClientEngine({
+        client, taskQueue,
+        workflowIdReusePolicy: "ALLOW_DUPLICATE_FAILED_ONLY",
+        workflowIdConflictPolicy: "USE_EXISTING",
+      });
+      const payload = { requestId: "policy-failed", mode: "fail-after-step" } as const;
+      const run = <A, E>(effect: Effect.Effect<A, E, WorkflowEngine.WorkflowEngine>, engine = defaults) =>
+        Effect.runPromise(Effect.provideService(effect, WorkflowEngine.WorkflowEngine, engine));
+      const execute = (engine = defaults) => run(Effect.result(Demo.execute(payload)), engine);
+      const executionId = await run(Demo.executionId(payload));
+
+      expect(Result.isFailure(await execute())).toBe(true);
+      const first = await client.workflow.getHandle(executionId).describe();
+      expect(first.status.name).toBe("FAILED");
+      expect(Result.isFailure(await execute())).toBe(true);
+      expect((await client.workflow.getHandle(executionId).describe()).runId).toBe(first.runId);
+
+      expect(Result.isFailure(await execute(restart))).toBe(true);
+      const second = await client.workflow.getHandle(executionId).describe();
+      expect(second.runId).not.toBe(first.runId);
+      expect(second.status.name).toBe("FAILED");
+    });
+  }, 120_000);
+
+  it("attaches concurrent retries to one new run after failure", async () => {
+    const { activities } = makeActivities();
+    let release!: () => void;
+    let started!: () => void;
+    let calls = 0;
+    const activityStarted = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    activities.longTask = async () => {
+      calls++;
+      started();
+      await gate;
+      return "done";
+    };
+    await temporal.withWorker({ activities, workflowsPath }, async (taskQueue) => {
+      const client = temporal.env.client;
+      const engine = makeTemporalClientEngine({
+        client, taskQueue,
+        workflowIdReusePolicy: "ALLOW_DUPLICATE_FAILED_ONLY",
+        workflowIdConflictPolicy: "USE_EXISTING",
+      });
+      const failed = { requestId: "policy-retry-race", mode: "fail-after-step" } as const;
+      const retry = { requestId: failed.requestId, mode: "long-activity" } as const;
+      const run = <A, E>(effect: Effect.Effect<A, E, WorkflowEngine.WorkflowEngine>) =>
+        Effect.runPromise(Effect.provideService(effect, WorkflowEngine.WorkflowEngine, engine));
+      expect(Result.isFailure(await run(Effect.result(Demo.execute(failed))))).toBe(true);
+      const id = await run(Demo.executionId(failed));
+      const handle = client.workflow.getHandle(id);
+      const failedRun = await handle.describe();
+      expect(failedRun.status.name).toBe("FAILED");
+      try {
+        const ids = await Promise.all([
+          run(Demo.execute(retry, { discard: true })),
+          run(Demo.execute(retry, { discard: true })),
+        ]);
+        expect(ids).toEqual([id, id]);
+        await activityStarted;
+        const active = await handle.describe();
+        expect(active.status.name).toBe("RUNNING");
+        expect(active.runId).not.toBe(failedRun.runId);
+        expect(calls).toBe(1);
+        release();
+        expect(await run(Demo.execute(retry))).toBe("reservation:policy-retry-race|done");
+        expect((await handle.describe()).runId).toBe(active.runId);
+        expect(calls).toBe(1);
+      } finally {
+        release();
+      }
+    });
+  }, 120_000);
+
+  it("attaches concurrent starts to the active run and preserves a successful result", async () => {
+    const { activities } = makeActivities();
+    let release!: () => void;
+    let started!: () => void;
+    const activityStarted = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    activities.longTask = async () => {
+      started();
+      await gate;
+      return "done";
+    };
+    await temporal.withWorker({ activities, workflowsPath }, async (taskQueue) => {
+      const client = temporal.env.client;
+      const engine = makeTemporalClientEngine({
+        client, taskQueue,
+        workflowIdReusePolicy: "ALLOW_DUPLICATE_FAILED_ONLY",
+        workflowIdConflictPolicy: "USE_EXISTING",
+      });
+      const payload = { requestId: "policy-active", mode: "long-activity" } as const;
+      const run = <A, E>(effect: Effect.Effect<A, E, WorkflowEngine.WorkflowEngine>) =>
+        Effect.runPromise(Effect.provideService(effect, WorkflowEngine.WorkflowEngine, engine));
+      try {
+        const ids = await Promise.all([
+          run(Demo.execute(payload, { discard: true })),
+          run(Demo.execute(payload, { discard: true })),
+        ]);
+        expect(ids[0]).toBe(ids[1]);
+        await activityStarted;
+        const handle = client.workflow.getHandle(ids[0]!);
+        const active = await handle.describe();
+        expect(active.status.name).toBe("RUNNING");
+        release();
+        expect(await run(Demo.execute(payload))).toBe("reservation:policy-active|done");
+        const completed = await handle.describe();
+        expect(completed.status.name).toBe("COMPLETED");
+        expect(completed.runId).toBe(active.runId);
+        expect(await run(Demo.execute(payload))).toBe("reservation:policy-active|done");
+        expect((await handle.describe()).runId).toBe(active.runId);
+      } finally {
+        release();
+      }
+    });
+  }, 120_000);
+
   it("durable delay + external approval, with deferredState inspection", async () => {
     const { activities, released } = makeActivities();
     await temporal.withWorker({ activities, workflowsPath }, async (taskQueue) => {

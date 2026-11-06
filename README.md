@@ -93,7 +93,16 @@ pnpm add @springbird/effect-temporal   # or npm / yarn / bun
   idempotency key) is the Temporal workflow id under `REJECT_DUPLICATE`; a
   repeated `execute`, a racing parent, or a Nexus caller attaches and gets
   the original result. Explicit caller-chosen workflow ids are first-class
-  for brownfield fleets.
+  for brownfield fleets. `WorkflowClient` and `makeTemporalClientEngine` accept Temporal's
+  `workflowIdReusePolicy` and `workflowIdConflictPolicy`. For example,
+  `ALLOW_DUPLICATE_FAILED_ONLY` with `USE_EXISTING` reuses an active run and
+  permits a new run after failure under the same stable execution id. This is
+  opt-in: it changes `execute` from retaining the original failed result to
+  restarting failed executions. Successful executions still attach. Temporal's
+  reuse guarantee is bounded by namespace history retention. These options
+  apply to client starts, not workflow-side child starts. If `FAIL` reports an
+  already-started error, digest starts and explicit-ID `execute` still attach;
+  explicit-ID `start` instead returns `WorkflowAlreadyStartedError`.
 - **Deterministic by construction** — the whole Effect program runs inside
   the workflow sandbox on a microtask scheduler; clocks, randomness, and
   timers resolve to Temporal's replay-stable primitives. The mechanism is

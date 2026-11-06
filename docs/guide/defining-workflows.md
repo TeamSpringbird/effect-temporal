@@ -44,11 +44,11 @@ There is exactly one way to *define* a workflow — the two-part shape above. St
 
 - **Application code** → the [`WorkflowClient`](#idempotency-and-execution-ids) service (`wf.start` / `wf.execute`). It carries the client and default task queue, adds explicit-id starts, `terminate`, and the messaging surfaces — nothing re-threads `{ client, taskQueue }` through your code.
 - **Inside a workflow body** → the definition's own `MyChild.execute(payload)`. That's a [child workflow](/guide/child-workflows), and it's the only correct form there — the sandbox engine is already in context.
-- **Library or test composition** → the raw engine (`makeTemporalClientEngine` + `MyFlow.execute` with the engine provided). This is the seam `WorkflowClient` wraps; reach for it when you're building on the engine contract itself, not in app code.
+- **Library or test composition** → the raw engine (`makeTemporalClientEngine` + `MyFlow.execute` with the engine provided). This is the seam `WorkflowClient` wraps.
 
 ## Idempotency and execution ids
 
-The digest execution id is the Temporal **workflow id**, started with `REJECT_DUPLICATE`. That makes `execute` idempotent end to end:
+By default, the digest execution id is the Temporal **workflow id**, started with `REJECT_DUPLICATE`. That makes `execute` idempotent end to end:
 
 - the first call starts the execution;
 - a repeated call — while it runs or **after it completed** — attaches and returns the original result;
@@ -66,6 +66,27 @@ const result = yield* wf.execute(OrderFlow, payload);
 
 You can compute the id yourself with `OrderFlow.executionId(payload)` — useful for polling or building UI links.
 
+### Opting into ID reuse
+
+To restart an unsuccessfully closed execution under the same workflow ID, configure the client:
+
+```ts
+import { makeWorkflowClient } from "@springbird/effect-temporal/client";
+
+const wf = makeWorkflowClient({
+  client,
+  taskQueue,
+  workflowIdReusePolicy: "ALLOW_DUPLICATE_FAILED_ONLY",
+  workflowIdConflictPolicy: "USE_EXISTING",
+});
+
+const result = yield* wf.execute(OrderFlow, payload);
+```
+
+With these options, a running execution is reused, an unsuccessfully closed execution can start a new run, and a successful execution remains attached. This changes the default idempotency contract: executing again after a failure can run the workflow again. Temporal's reuse guarantee is bounded by namespace history retention.
+
+The same options are available on `makeTemporalClientEngine`. They apply to digest and explicit-ID client starts, not child starts. When Temporal reports an already-started error, digest starts and explicit-ID `execute` attach even with conflict policy `FAIL`; explicit-ID `start` returns `WorkflowAlreadyStartedError`. With `USE_EXISTING`, an active explicit-ID `start` instead succeeds by attaching.
+
 ## Explicit workflow ids
 
 Brownfield fleets often have load-bearing workflow ids — persisted to rows, scoped by environment, terminated by id. Passing `workflowId` opts a call out of the digest scheme:
@@ -74,7 +95,7 @@ Brownfield fleets often have load-bearing workflow ids — persisted to rows, sc
 yield* wf.start(QueueDispatch, { dispatchId }, { workflowId: `dispatch-${dispatchId}` });
 ```
 
-The two methods differ on a duplicate id, and the difference is deliberate:
+By default, the two methods differ on a duplicate id, and the difference is deliberate:
 
 - **`start`** fails with the typed `WorkflowAlreadyStartedError` — "start exactly once" semantics for callers that must know.
 - **`execute`** attaches to the existing execution and returns its result — the same attach semantics as digest ids.
