@@ -42,6 +42,7 @@ import {
   offerMailbox,
   readStateCell,
   ScheduleAlreadyExistsError,
+  type TemporalClientEngineOptions,
 } from "./engine-client.js";
 import type { DeferredLike, MailboxLike, StateCellLike, UpdateLike } from "./definition.js";
 import { classifyThrown } from "./thrown.js";
@@ -227,7 +228,10 @@ export class WorkflowClient extends Context.Service<WorkflowClient, WorkflowClie
  * @since 0.1.0
  * @category models
  */
-export interface WorkflowClientConfig {
+export interface WorkflowClientConfig extends Pick<
+  TemporalClientEngineOptions,
+  "workflowIdReusePolicy" | "workflowIdConflictPolicy"
+> {
   readonly client: Client;
   readonly taskQueue: string;
 }
@@ -237,7 +241,10 @@ export interface WorkflowClientConfig {
 // instead of digest execution ids, for fleets whose ids are load-bearing
 // (persisted to rows, stage-scoped, terminated by id).
 
-interface ExplicitIdStart<W extends Workflow.Any> {
+interface ExplicitIdStart<W extends Workflow.Any> extends Pick<
+  TemporalClientEngineOptions,
+  "workflowIdReusePolicy" | "workflowIdConflictPolicy"
+> {
   readonly client: Client;
   readonly workflow: W;
   readonly workflowId: string;
@@ -273,6 +280,8 @@ const startById = <W extends Workflow.Any>(
       workflowId: options.workflowId,
       taskQueue: options.taskQueue,
       args: [wireCodecsFor(options.workflow).encodePayload(options.payload)],
+      ...(options.workflowIdReusePolicy === undefined ? {} : { workflowIdReusePolicy: options.workflowIdReusePolicy }),
+      ...(options.workflowIdConflictPolicy === undefined ? {} : { workflowIdConflictPolicy: options.workflowIdConflictPolicy }),
       ...(options.memo === undefined ? {} : { memo: options.memo }),
     });
   }).pipe(
@@ -301,6 +310,8 @@ const executeById = <W extends Workflow.Any>(
         workflowId: options.workflowId,
         taskQueue: options.taskQueue,
         args: [codecs.encodePayload(options.payload)],
+        ...(options.workflowIdReusePolicy === undefined ? {} : { workflowIdReusePolicy: options.workflowIdReusePolicy }),
+        ...(options.workflowIdConflictPolicy === undefined ? {} : { workflowIdConflictPolicy: options.workflowIdConflictPolicy }),
         ...(options.memo === undefined ? {} : { memo: options.memo }),
       })
       .catch((error: unknown) => {
@@ -373,7 +384,7 @@ export const makeWorkflowClient = (config: WorkflowClientConfig): WorkflowClient
   const engineFor = (taskQueue: string) => {
     let engine = engines.get(taskQueue);
     if (engine === undefined) {
-      engine = makeTemporalClientEngine({ client: config.client, taskQueue });
+      engine = makeTemporalClientEngine({ ...config, taskQueue });
       engines.set(taskQueue, engine);
     }
     return engine;
@@ -389,6 +400,8 @@ export const makeWorkflowClient = (config: WorkflowClientConfig): WorkflowClient
           workflowId: options.workflowId,
           payload,
           taskQueue,
+          ...(config.workflowIdReusePolicy === undefined ? {} : { workflowIdReusePolicy: config.workflowIdReusePolicy }),
+          ...(config.workflowIdConflictPolicy === undefined ? {} : { workflowIdConflictPolicy: config.workflowIdConflictPolicy }),
           ...(options.memo === undefined ? {} : { memo: options.memo }),
           ...(options.deadlineMillis === undefined
             ? {}
@@ -424,6 +437,8 @@ export const makeWorkflowClient = (config: WorkflowClientConfig): WorkflowClient
           workflowId: options.workflowId,
           payload,
           taskQueue,
+          ...(config.workflowIdReusePolicy === undefined ? {} : { workflowIdReusePolicy: config.workflowIdReusePolicy }),
+          ...(config.workflowIdConflictPolicy === undefined ? {} : { workflowIdConflictPolicy: config.workflowIdConflictPolicy }),
           ...(options.memo === undefined ? {} : { memo: options.memo }),
           ...(options.deadlineMillis === undefined
             ? {}
